@@ -20,7 +20,7 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
-            to="/intro">
+            to="/intro/">
             Comenzar con la Documentación 📚
           </Link>
         </div>
@@ -135,22 +135,22 @@ function HomepageQuickLinks() {
     {
       title: '🎯 Visión General',
       description: 'Entiende la arquitectura completa del sistema',
-      link: '/arquitectura/vision-general',
+      link: '/arquitectura/vision-general/',
     },
     {
       title: '🔧 Microservicios',
       description: 'Documentación detallada de cada servicio',
-      link: '/microservicios/auth-service/overview',
+      link: '/microservicios/auth-service/overview/',
     },
     {
       title: '🚢 Deployment',
       description: 'Guía completa de deployment con Docker',
-      link: '/deployment/docker-compose',
+      link: '/deployment/docker-compose/',
     },
     {
       title: '🧪 Testing',
       description: 'Estrategia de testing y ejemplos',
-      link: '/testing/estrategia-testing',
+      link: '/testing/estrategia-testing/',
     },
   ];
 
@@ -191,7 +191,7 @@ export default function Home() {
             <p>Explora la documentación completa y descubre cómo implementar un ERP moderno con microservicios.</p>
             <Link
               className="button button--primary button--lg"
-              to="/intro">
+              to="/intro/">
               Ver Documentación Completa
             </Link>
           </div>
