@@ -11,13 +11,13 @@ const config = {
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://your-domain.com',
+  url: 'https://captainsparrow10.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
-  baseUrl: '/',
+  baseUrl: '/zenlogic/',
 
   // GitHub pages deployment config.
-  organizationName: 'universidad',
-  projectName: 'erp-docs',
+  organizationName: 'captainsparrow10',
+  projectName: 'zenlogic',
 
   onBrokenLinks: 'warn', // Cambiar a 'warn' temporalmente para deployment
   onBrokenMarkdownLinks: 'warn',
