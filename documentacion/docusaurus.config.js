@@ -57,8 +57,8 @@ const config = {
       navbar: {
         title: 'zenLogic',
         logo: {
-          alt: 'ERP Logo',
-          src: 'img/logo.svg',
+          alt: 'zenLogic Logo',
+          src: 'img/logo.png',
         },
         items: [
           {
