@@ -166,6 +166,22 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: '🚢 Deployment',
+      collapsed: false,
+      items: [
+        'deployment/docker-compose',
+      ],
+    },
+    {
+      type: 'category',
+      label: '🧪 Testing',
+      collapsed: false,
+      items: [
+        'testing/estrategia-testing',
+      ],
+    },
+    {
+      type: 'category',
       label: '📚 Guías',
       collapsed: false,
       items: [
