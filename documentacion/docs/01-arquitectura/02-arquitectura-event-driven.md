@@ -23,19 +23,17 @@ Un evento es un **registro inmutable** de algo que ocurrió en el sistema.
 
 ```json
 {
-  "event_id": "evt_88291ABC",
-  "event_type": "auth.user.created",
-  "event_version": "v1",
+  "event": "auth.user.created",
   "timestamp": "2025-11-15T10:30:00Z",
+  "service": "auth-service",
+  "version": "1.0",
   "organization_id": "org_123",
-  "actor": {
-    "user_id": "user_admin_001",
-    "email": "admin@empresa.com"
-  },
-  "payload": {
+  "data": {
     "user_id": "user_002",
     "email": "vendedor@empresa.com",
-    "roles": ["role_sales"]
+    "roles": ["role_sales"],
+    "created_by": "user_admin_001",
+    "created_at": "2025-11-15T10:30:00Z"
   }
 }
 ```
@@ -224,9 +222,15 @@ Eventos notifican que algo ocurrió sin incluir todos los detalles.
 
 ```json
 {
-  "event_type": "catalog.product.updated",
-  "product_id": "prod_123",
-  "changes": ["price", "title"]
+  "event": "catalog.product.updated",
+  "timestamp": "2025-11-15T10:30:00Z",
+  "service": "catalog-service",
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
+    "product_id": "prod_123",
+    "changes": ["price", "title"]
+  }
 }
 ```
 
@@ -236,12 +240,18 @@ Eventos incluyen toda la información necesaria.
 
 ```json
 {
-  "event_type": "auth.user.created",
-  "user": {
-    "id": "user_002",
+  "event": "auth.user.created",
+  "timestamp": "2025-11-15T10:30:00Z",
+  "service": "auth-service",
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
+    "user_id": "user_002",
     "email": "user@example.com",
     "roles": ["role_sales"],
-    "organization_id": "org_123"
+    "first_name": "Juan",
+    "last_name": "Pérez",
+    "active": true
   }
 }
 ```
@@ -276,17 +286,19 @@ async def process_event(event):
 
 ## Versionado de Eventos
 
-Los eventos incluyen `event_version` para evolución:
+Los eventos incluyen `version` para evolución:
 
 ```json
 {
-  "event_type": "auth.user.created",
-  "event_version": "v1",  ← versión
-  "payload": {...}
+  "event": "auth.user.created",
+  "version": "1.0",  ← versión semántica
+  "service": "auth-service",
+  "organization_id": "org_123",
+  "data": {...}
 }
 ```
 
-Si el formato cambia → `v2`, y consumers soportan ambas versiones.
+Si el formato cambia → `2.0`, y consumers soportan ambas versiones.
 
 ## Consistencia Eventual
 
@@ -331,5 +343,5 @@ sequenceDiagram
 - [Auth Service - Eventos Publicados](/microservicios/auth-service/eventos-publicados)
 - [Catalog Service - Event Consumers](/microservicios/catalog-service/eventos-consumidos)
 - [Audit Service](/microservicios/audit-service/overview)
-- [ADR-001: Event-Driven en Auth](/decisiones-arquitectura/adr-001-event-driven-auth)
-- [Integración - RabbitMQ](/integraciones/01-rabbitmq)
+- [ADR-003: Event-Driven Architecture](/adrs/adr-003-event-driven)
+- [Integración - RabbitMQ](/integraciones/rabbitmq)

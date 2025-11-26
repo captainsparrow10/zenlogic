@@ -266,6 +266,196 @@ ORDER BY events_count DESC
 LIMIT 20;
 ```
 
+## Anti-Falsificación
+
+### Integridad de Registros
+
+El sistema implementa múltiples capas para garantizar que los logs no puedan ser alterados:
+
+#### 1. Checksum por Registro
+
+Cada registro incluye un checksum SHA-256 de sus datos críticos:
+
+```sql
+-- Agregar columna de checksum
+ALTER TABLE audit_logs ADD COLUMN checksum VARCHAR(64);
+
+-- Función para calcular checksum
+CREATE OR REPLACE FUNCTION calculate_audit_checksum(
+    p_event_id VARCHAR,
+    p_event_type VARCHAR,
+    p_created_at TIMESTAMP,
+    p_payload JSONB,
+    p_organization_id UUID
+) RETURNS VARCHAR AS $$
+BEGIN
+    RETURN encode(
+        sha256(
+            (p_event_id || p_event_type || p_created_at::TEXT ||
+             p_payload::TEXT || COALESCE(p_organization_id::TEXT, ''))::bytea
+        ),
+        'hex'
+    );
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Trigger para auto-generar checksum
+CREATE OR REPLACE FUNCTION generate_audit_checksum()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.checksum := calculate_audit_checksum(
+        NEW.event_id,
+        NEW.event_type,
+        NEW.created_at,
+        NEW.payload,
+        NEW.organization_id
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER audit_checksum_trigger
+BEFORE INSERT ON audit_logs
+FOR EACH ROW EXECUTE FUNCTION generate_audit_checksum();
+```
+
+#### 2. Cadena de Hashes (Hash Chain)
+
+Cada registro referencia el hash del registro anterior, creando una cadena verificable:
+
+```sql
+-- Agregar columna para hash anterior
+ALTER TABLE audit_logs ADD COLUMN previous_hash VARCHAR(64);
+ALTER TABLE audit_logs ADD COLUMN sequence_number BIGSERIAL;
+
+-- Función para obtener hash anterior
+CREATE OR REPLACE FUNCTION get_previous_audit_hash(org_id UUID)
+RETURNS VARCHAR AS $$
+DECLARE
+    prev_hash VARCHAR;
+BEGIN
+    SELECT checksum INTO prev_hash
+    FROM audit_logs
+    WHERE organization_id = org_id
+    ORDER BY sequence_number DESC
+    LIMIT 1;
+
+    RETURN COALESCE(prev_hash, 'GENESIS');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para enlazar con registro anterior
+CREATE OR REPLACE FUNCTION link_audit_chain()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.previous_hash := get_previous_audit_hash(NEW.organization_id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER audit_chain_trigger
+BEFORE INSERT ON audit_logs
+FOR EACH ROW EXECUTE FUNCTION link_audit_chain();
+```
+
+### Verificación de Integridad
+
+```python
+# audit_service/integrity.py
+import hashlib
+from typing import Optional
+
+async def verify_audit_checksum(log: AuditLog) -> bool:
+    """Verificar checksum de un registro individual."""
+    expected = hashlib.sha256(
+        f"{log.event_id}{log.event_type}{log.created_at}"
+        f"{log.payload}{log.organization_id or ''}".encode()
+    ).hexdigest()
+
+    return log.checksum == expected
+
+async def verify_audit_chain(
+    organization_id: str,
+    start_seq: int,
+    end_seq: int
+) -> dict:
+    """Verificar integridad de cadena de logs."""
+    logs = await get_logs_range(organization_id, start_seq, end_seq)
+
+    broken_links = []
+    invalid_checksums = []
+
+    for i, log in enumerate(logs):
+        # Verificar checksum individual
+        if not await verify_audit_checksum(log):
+            invalid_checksums.append(log.sequence_number)
+
+        # Verificar enlace con anterior
+        if i > 0:
+            expected_prev = logs[i-1].checksum
+            if log.previous_hash != expected_prev:
+                broken_links.append(log.sequence_number)
+
+    return {
+        "verified_count": len(logs),
+        "valid": len(broken_links) == 0 and len(invalid_checksums) == 0,
+        "broken_links": broken_links,
+        "invalid_checksums": invalid_checksums
+    }
+
+async def audit_integrity_report(organization_id: str) -> dict:
+    """Generar reporte de integridad completo."""
+    # Verificar últimos 1000 registros
+    result = await verify_audit_chain(organization_id, -1000, -1)
+
+    # Contar por tipo de evento
+    stats = await get_event_type_stats(organization_id)
+
+    return {
+        "organization_id": organization_id,
+        "integrity_check": result,
+        "event_stats": stats,
+        "checked_at": datetime.utcnow().isoformat()
+    }
+```
+
+### API de Verificación
+
+```python
+@router.get("/integrity/{organization_id}")
+async def check_integrity(
+    organization_id: str,
+    start_sequence: int = Query(default=-1000),
+    end_sequence: int = Query(default=-1),
+    ctx: TenantContext = Depends(get_admin_context)
+) -> IntegrityReport:
+    """
+    Verificar integridad de logs de auditoría.
+
+    Solo accesible por administradores del sistema.
+    """
+    return await audit_integrity_report(organization_id)
+
+@router.get("/verify/{event_id}")
+async def verify_single_event(
+    event_id: str,
+    ctx: TenantContext = Depends(get_admin_context)
+) -> VerificationResult:
+    """Verificar un evento específico."""
+    log = await get_log_by_event_id(event_id)
+    if not log:
+        raise HTTPException(404, "Event not found")
+
+    is_valid = await verify_audit_checksum(log)
+
+    return VerificationResult(
+        event_id=event_id,
+        checksum_valid=is_valid,
+        stored_checksum=log.checksum,
+        previous_hash=log.previous_hash
+    )
+```
+
 ## Triggers de Inmutabilidad
 
 ```sql
@@ -281,10 +471,14 @@ CREATE TRIGGER prevent_update_audit_logs
 BEFORE UPDATE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_update();
 
--- Prevenir DELETE
+-- Prevenir DELETE (excepto por retention policy)
 CREATE OR REPLACE FUNCTION prevent_audit_delete()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- Solo permitir DELETE desde proceso de retention
+    IF current_setting('app.retention_process', true) = 'true' THEN
+        RETURN OLD;
+    END IF;
     RAISE EXCEPTION 'Audit logs are immutable - DELETE not allowed';
 END;
 $$ LANGUAGE plpgsql;
@@ -292,6 +486,45 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER prevent_delete_audit_logs
 BEFORE DELETE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_delete();
+```
+
+### Proceso de Retention (único que puede eliminar)
+
+```python
+async def execute_retention_policy(days_to_keep: int = 365):
+    """
+    Eliminar logs antiguos siguiendo política de retención.
+    Este es el único proceso autorizado para eliminar logs.
+    """
+    async with db.begin():
+        # Habilitar flag de retention
+        await db.execute("SET LOCAL app.retention_process = 'true'")
+
+        # Eliminar particiones antiguas
+        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+
+        result = await db.execute(
+            """
+            DELETE FROM audit_logs
+            WHERE created_at < :cutoff
+            RETURNING id
+            """,
+            {"cutoff": cutoff_date}
+        )
+
+        deleted_count = result.rowcount
+
+        # Registrar la eliminación como evento de auditoría
+        await create_audit_log(
+            event_type="audit.retention.executed",
+            payload={
+                "deleted_count": deleted_count,
+                "cutoff_date": cutoff_date.isoformat(),
+                "policy_days": days_to_keep
+            }
+        )
+
+    return deleted_count
 ```
 
 ## Estimaciones de Tamaño

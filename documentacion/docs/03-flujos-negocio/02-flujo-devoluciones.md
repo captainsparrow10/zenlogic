@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Flujo de Devoluciones (Returns)
@@ -148,7 +148,7 @@ async def create_return(order_id: str, return_request: ReturnCreate):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="return.requested",
+        event_name="return.requested",
         data={
             "return_id": str(return_obj.return_id),
             "order_id": str(order.order_id),
@@ -233,7 +233,7 @@ async def approve_return(return_id: str, approval: ReturnApproval):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="return.approved",
+        event_name="return.approved",
         data={
             "return_id": str(return_obj.return_id),
             "rma_number": return_obj.rma_number,
@@ -295,7 +295,7 @@ async def fedex_return_tracking(request: Request):
         await return_repo.update(return_obj)
 
         await event_publisher.publish(
-            event_type="return.in_transit",
+            event_name="return.in_transit",
             data={
                 "return_id": str(return_obj.return_id),
                 "tracking_number": return_obj.return_tracking_number
@@ -338,7 +338,7 @@ async def receive_return(return_id: str, receipt: ReturnReceipt):
 
     # Publicar evento (Inventory lo consumirá)
     await event_publisher.publish(
-        event_type="return.received",
+        event_name="return.received",
         data={
             "return_id": str(return_obj.return_id),
             "order_id": str(return_obj.order_id),
@@ -414,7 +414,7 @@ async def inspect_return(return_id: str, inspection: ReturnInspection):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="return.inspected",
+        event_name="return.inspected",
         data={
             "return_id": str(return_obj.return_id),
             "items": [
@@ -506,7 +506,7 @@ async def handle_return_received(event):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="inventory.stock.restocked",
+        event_name="inventory.stock.restocked",
         data={
             "return_id": event['data']['return_id'],
             "warehouse_id": warehouse_id,
@@ -556,7 +556,7 @@ async def process_return_refund(return_id: str):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="payment.refunded",
+        event_name="payment.refunded",
         data={
             "payment_id": str(refund_payment.payment_id),
             "order_id": str(return_obj.order_id),
@@ -588,7 +588,7 @@ async def stripe_webhook(request: Request):
 
         # Publicar evento
         await event_publisher.publish(
-            event_type="return.refunded",
+            event_name="return.refunded",
             data={
                 "return_id": str(return_obj.return_id),
                 "refund_amount": float(return_obj.refund_amount),
@@ -741,5 +741,5 @@ restock_success_rate = Gauge(
 ## Próximos Pasos
 
 - [Flujo de Venta Completo](./flujo-venta-completo)
-- [Flujo de Transferencias de Stock](./flujo-transferencias)
-- [Compensaciones y Rollbacks](./compensaciones)
+- [Flujo de Compras](./flujo-compras)
+- [Sistema de Pagos](./sistema-pagos)

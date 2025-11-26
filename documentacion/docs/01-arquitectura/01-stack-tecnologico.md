@@ -129,7 +129,7 @@ El stack tecnológico del zenLogic fue seleccionado considerando factores como:
 - DLQ para mensajes fallidos
 - Retry con backoff exponencial
 
-**Por qué RabbitMQ y no Kafka**: Ver [ADR-005](/decisiones-arquitectura/adr-005-rabbitmq-vs-kafka)
+**Por qué RabbitMQ y no Kafka**: Ver [ADR-003: Event-Driven Architecture](/adrs/adr-003-event-driven)
 
 ## Containerización
 
@@ -336,6 +336,6 @@ Para profundizar en el uso de estas tecnologías:
 
 1. [Arquitectura Event-Driven](/arquitectura/arquitectura-event-driven) - Cómo usamos RabbitMQ
 2. [Comunicación entre Microservicios](/arquitectura/comunicacion-microservicios) - REST + gRPC
-3. [Integraciones - RabbitMQ](/integraciones/01-rabbitmq) - Configuración detallada
-4. [Integraciones - gRPC](/integraciones/02-grpc-proto-files) - Proto files y setup
-5. [Integraciones - PostgreSQL](/integraciones/04-postgresql) - Setup de base de datos
+3. [Integraciones - RabbitMQ](/integraciones/rabbitmq) - Configuración detallada
+4. [Integraciones - gRPC](/integraciones/grpc) - Proto files y setup
+5. [Integraciones - PostgreSQL](/integraciones/postgresql) - Setup de base de datos

@@ -133,8 +133,8 @@ graph LR
    ```python
    # Auth Service publica evento sin saber quién lo consume
    await event_publisher.publish(
-       event_type="auth.user.deactivated",
-       payload={
+       event_name="auth.user.deactivated",
+       data={
            "user_id": user_id,
            "email": user.email,
            "organization_id": org_id
@@ -310,14 +310,14 @@ class EventPublisher:
             durable=True
         )
 
-    async def publish(self, event_type: str, payload: dict):
+    async def publish(self, event_type: str, data: dict):
         event = {
             "event_id": str(uuid4()),
-            "event_type": event_type,
+            "event": event_type,
             "timestamp": datetime.utcnow().isoformat(),
             "service": settings.service_name,
             "version": "1.0",
-            "payload": payload
+            "data": data
         }
 
         message = aio_pika.Message(
@@ -374,14 +374,14 @@ class EventConsumer:
 
     async def process_message(self, message: aio_pika.IncomingMessage):
         async with message.process():
-            event = json.loads(message.body.decode())
-            event_type = event["event_type"]
+            event_data = json.loads(message.body.decode())
+            event_name = event_data["event"]
 
-            handler = event_handlers.get(event_type)
+            handler = event_handlers.get(event_name)
             if handler:
-                await handler(event)
+                await handler(event_data)
             else:
-                logger.warning(f"No handler for event: {event_type}")
+                logger.warning(f"No handler for event: {event_name}")
 ```
 
 ## Patrón de Eventos
@@ -391,13 +391,13 @@ class EventConsumer:
 ```json
 {
   "event_id": "550e8400-e29b-41d4-a716-446655440000",
-  "event_type": "catalog.product.created",
+  "event": "catalog.product.created",
   "timestamp": "2025-11-23T10:30:00Z",
   "service": "catalog-service",
   "version": "1.0",
-  "payload": {
+  "organization_id": "org-uuid",
+  "data": {
     "product_id": "prod-uuid",
-    "organization_id": "org-uuid",
     "name": "Camiseta Básica",
     "sku": "CAM-001",
     "base_price": 19.99,

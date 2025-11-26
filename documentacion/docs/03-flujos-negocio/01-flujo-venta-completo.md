@@ -398,7 +398,7 @@ sequenceDiagram
 
            # Publicar evento
            await event_publisher.publish(
-               event_type="payment.succeeded",
+               event_name="payment.succeeded",
                data={
                    "payment_id": payment.payment_id,
                    "order_id": order_id,
@@ -451,7 +451,7 @@ async def ConfirmReservation(self, request, context):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="inventory.reservation.confirmed",
+        event_name="inventory.reservation.confirmed",
         data={
             "reservation_id": str(reservation.reservation_id),
             "order_id": str(reservation.order_id)
@@ -478,7 +478,7 @@ async def handle_reservation_confirmed(event):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="order.confirmed",
+        event_name="order.confirmed",
         data={
             "order_id": str(order.order_id),
             "order_number": order.order_number,
@@ -867,5 +867,5 @@ logger.info(
 ## Próximos Pasos
 
 - [Flujo de Devoluciones](./flujo-devoluciones)
-- [Flujo de Transferencias de Stock](./flujo-transferencias)
-- [Manejo de Errores y Compensaciones](./manejo-errores)
+- [Flujo de Compras](./flujo-compras)
+- [Sistema de Pagos](./sistema-pagos)

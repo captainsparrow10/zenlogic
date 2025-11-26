@@ -1201,6 +1201,6 @@ class EventConsumer:
 
 ## Próximos Pasos
 
-- [Circuit Breaker Patterns](/resiliencia/circuit-breaker)
-- [Chaos Engineering](/resiliencia/chaos-engineering)
-- [Disaster Recovery](/resiliencia/disaster-recovery)
+- [Guía de Observabilidad](/observabilidad/guia-observabilidad) - Logging, métricas y tracing
+- [Estrategia de Testing](/testing/estrategia-testing) - Testing de resiliencia
+- [Flujos de Negocio](/flujos-negocio/flujo-venta-completo) - Flujos con manejo de errores

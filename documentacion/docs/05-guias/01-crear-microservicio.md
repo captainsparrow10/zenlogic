@@ -40,21 +40,25 @@ new-service/
 │   └── versions/
 ├── scripts/
 │   └── seed_data.py
-├── requirements.txt
+├── pyproject.toml           # Poetry - dependencias y configuración
+├── poetry.lock              # Poetry - lock de versiones
 ├── .env.example
 ├── Dockerfile
 ├── alembic.ini
 └── README.md
 ```
 
-## Paso 1: Crear Proyecto Base
+## Paso 1: Crear Proyecto Base con Poetry
 
 ```bash
 # Crear directorio
 mkdir services/new-service
 cd services/new-service
 
-# Crear estructura
+# Inicializar proyecto con Poetry
+poetry init --name new-service --python "^3.11" --no-interaction
+
+# Crear estructura de directorios
 mkdir -p app/{models,schemas,api/v1,services,repositories,events,grpc_server,clients}
 mkdir -p tests scripts alembic/versions
 
@@ -216,13 +220,14 @@ class EventPublisher:
             durable=True
         )
 
-    async def publish(self, event_type: str, payload: dict):
+    async def publish(self, event_name: str, data: dict, organization_id: str):
         event = {
-            "event_id": str(uuid4()),
-            "event_type": event_type,
+            "event": event_name,
             "timestamp": datetime.utcnow().isoformat(),
             "service": settings.service_name,
-            "payload": payload
+            "version": "1.0",
+            "organization_id": organization_id,
+            "data": data
         }
 
         message = aio_pika.Message(
@@ -230,7 +235,7 @@ class EventPublisher:
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
 
-        await self.exchange.publish(message, routing_key=event_type)
+        await self.exchange.publish(message, routing_key=event_name)
 
     async def close(self):
         if self.connection:
@@ -239,45 +244,97 @@ class EventPublisher:
 event_publisher = EventPublisher()
 ```
 
-## Paso 6: Requirements
+## Paso 6: Instalar Dependencias con Poetry
 
-```txt
-# requirements.txt
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy[asyncio]==2.0.23
-asyncpg==0.29.0
-alembic==1.12.1
-pydantic==2.5.0
-pydantic-settings==2.1.0
-aio-pika==9.3.0
-aioredis==2.0.1
-grpcio==1.59.3
-prometheus-client==0.19.0
+```bash
+# Dependencias de producción
+poetry add fastapi uvicorn[standard] sqlalchemy[asyncio] asyncpg alembic
+poetry add pydantic pydantic-settings aio-pika redis grpcio prometheus-client structlog
 
-# Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-httpx==0.25.2
+# Dependencias de desarrollo
+poetry add --group dev pytest pytest-asyncio pytest-cov httpx ruff mypy
 ```
 
-## Paso 7: Docker
+El archivo `pyproject.toml` resultante:
+
+```toml
+[tool.poetry]
+name = "new-service"
+version = "1.0.0"
+description = "New microservice for zenLogic ERP"
+authors = ["zenLogic Team"]
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.104.1"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.23"}
+asyncpg = "^0.29.0"
+alembic = "^1.12.1"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+aio-pika = "^9.3.0"
+redis = "^5.0.1"
+grpcio = "^1.59.3"
+prometheus-client = "^0.19.0"
+structlog = "^23.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+pytest-cov = "^4.1.0"
+httpx = "^0.25.2"
+ruff = "^0.1.6"
+mypy = "^1.7.0"
+
+[tool.poetry.scripts]
+start = "scripts.run:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+```
+
+> Para más detalles sobre Poetry, ver [Poetry - Gestión de Dependencias](./05-poetry-setup.md)
+
+## Paso 7: Docker con Poetry
 
 ```dockerfile
 # Dockerfile
-FROM python:3.11-slim
+FROM python:3.11-slim as base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Builder stage
+FROM base as builder
+
+RUN pip install poetry==1.7.1
+
+WORKDIR /app
+COPY pyproject.toml poetry.lock ./
+
+# Export to requirements.txt para builds más rápidos
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+# Runtime stage
+FROM base as runtime
 
 WORKDIR /app
 
-# Dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=builder /app/requirements.txt .
+RUN pip install -r requirements.txt
 
-# Code
 COPY . .
 
-# Run
+EXPOSE 8004
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"]
 ```
 
@@ -306,7 +363,7 @@ services:
 
 ```bash
 # Inicializar
-alembic init alembic
+poetry run alembic init alembic
 
 # Configurar alembic.ini
 nano alembic.ini
@@ -354,21 +411,39 @@ async def test_health(client):
     assert response.json()["status"] == "healthy"
 ```
 
+Ejecutar tests:
+
+```bash
+# Ejecutar todos los tests
+poetry run pytest
+
+# Con coverage
+poetry run pytest --cov=app --cov-report=html
+
+# Linting
+poetry run ruff check .
+
+# Type checking
+poetry run mypy app
+```
+
 ## Checklist de Integración
 
+- [ ] `poetry install` ejecutado correctamente
 - [ ] Base de datos creada en PostgreSQL
-- [ ] Migraciones ejecutadas
+- [ ] Migraciones ejecutadas (`poetry run alembic upgrade head`)
 - [ ] Event publisher conectado a RabbitMQ
 - [ ] Event consumer configurado (si aplica)
 - [ ] Health check funcionando
 - [ ] API docs accesibles (/docs)
-- [ ] Tests passing
+- [ ] Tests passing (`poetry run pytest`)
 - [ ] Añadido a docker-compose.yml
 - [ ] README.md actualizado
 - [ ] Documentación en Docusaurus
 
 ## Próximos Pasos
 
-- [Testing](/guias/testing)
-- [Deployment](/guias/deployment)
-- [Troubleshooting](/guias/troubleshooting)
+- [Poetry - Gestión de Dependencias](./05-poetry-setup.md)
+- [Testing](./02-testing.md)
+- [Deployment](./03-deployment.md)
+- [Troubleshooting](./04-troubleshooting.md)

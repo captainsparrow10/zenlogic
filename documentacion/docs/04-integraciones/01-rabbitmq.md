@@ -169,28 +169,27 @@ class EventPublisher:
 
     async def publish(
         self,
-        event_type: str,
-        payload: Dict[str, Any],
-        metadata: Dict[str, Any] = None
+        event_name: str,
+        data: Dict[str, Any],
+        organization_id: str
     ):
         """
         Publicar evento.
 
         Args:
-            event_type: Tipo de evento (routing key)
-            payload: Datos del evento
-            metadata: Metadata adicional (user_id, correlation_id, etc.)
+            event_name: Nombre del evento (routing key)
+            data: Datos del evento
+            organization_id: ID de la organización
         """
 
         # Construir evento
         event = {
-            "event_id": str(uuid4()),
-            "event_type": event_type,
+            "event": event_name,
             "timestamp": datetime.utcnow().isoformat(),
             "service": settings.service_name,
             "version": "1.0",
-            "payload": payload,
-            "metadata": metadata or {}
+            "organization_id": organization_id,
+            "data": data
         }
 
         # Serializar
@@ -201,23 +200,23 @@ class EventPublisher:
             body=message_body,
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,  # Persistente
             content_type="application/json",
-            message_id=event["event_id"],
+            message_id=str(uuid4()),
             timestamp=datetime.utcnow()
         )
 
         # Publicar
         await self.exchange.publish(
             message,
-            routing_key=event_type
+            routing_key=event_name
         )
 
         logger.info(
-            f"Event published: {event_type}",
-            extra={"event_id": event["event_id"]}
+            f"Event published: {event_name}",
+            extra={"event": event["event"]}
         )
 
         # Métricas
-        events_published.labels(event_type=event_type).inc()
+        events_published.labels(event_type=event_name).inc()
 
     async def close(self):
         """Cerrar conexión."""
@@ -250,17 +249,15 @@ async def create_product(product: ProductCreate):
 
     # Publicar evento
     await event_publisher.publish(
-        event_type="catalog.product.created",
-        payload={
+        event_name="catalog.product.created",
+        organization_id=str(new_product.organization_id),
+        data={
             "product_id": str(new_product.id),
-            "organization_id": str(new_product.organization_id),
             "name": new_product.name,
             "sku": new_product.sku,
-            "base_price": float(new_product.base_price)
-        },
-        metadata={
-            "user_id": current_user.id,
-            "correlation_id": request.state.correlation_id
+            "base_price": float(new_product.base_price),
+            "created_by": current_user.id,
+            "created_at": new_product.created_at.isoformat()
         }
     )
 
@@ -344,15 +341,15 @@ class EventConsumer:
             try:
                 # Parsear evento
                 event = json.loads(message.body.decode())
-                event_type = event["event_type"]
+                event_name = event["event"]
 
                 logger.info(
-                    f"Processing event: {event_type}",
-                    extra={"event_id": event.get("event_id")}
+                    f"Processing event: {event_name}",
+                    extra={"event": event_name}
                 )
 
                 # Buscar handler
-                handler = self.handlers.get(event_type)
+                handler = self.handlers.get(event_name)
 
                 if handler:
                     # Ejecutar handler
@@ -363,13 +360,13 @@ class EventConsumer:
 
                     # Métricas
                     events_consumed.labels(
-                        event_type=event_type,
+                        event_type=event_name,
                         status="success"
                     ).inc()
 
-                    logger.info(f"Event processed successfully: {event_type}")
+                    logger.info(f"Event processed successfully: {event_name}")
                 else:
-                    logger.warning(f"No handler for event: {event_type}")
+                    logger.warning(f"No handler for event: {event_name}")
                     await message.ack()  # ACK anyway
 
             except Exception as e:
@@ -383,7 +380,7 @@ class EventConsumer:
 
                 # Métricas
                 events_consumed.labels(
-                    event_type=event.get("event_type", "unknown"),
+                    event_type=event.get("event", "unknown"),
                     status="error"
                 ).inc()
 
@@ -426,18 +423,18 @@ async def shutdown():
 # Handlers
 async def handle_user_created(event: dict):
     """Handler para auth.user.created."""
-    payload = event["payload"]
-    logger.info(f"User created: {payload['user_id']}")
+    data = event["data"]
+    logger.info(f"User created: {data['user_id']}")
 
     # Lógica de negocio
     # ...
 
 async def handle_local_created(event: dict):
     """Handler para auth.local.created."""
-    payload = event["payload"]
+    data = event["data"]
 
     # Invalidar cache de locales
-    await redis.delete(f"org:{payload['organization_id']}:locals")
+    await redis.delete(f"org:{event['organization_id']}:locals")
 ```
 
 ## Dead Letter Queue (DLQ)
@@ -521,7 +518,7 @@ async def handle_event_idempotent(event: dict):
     await db.execute(
         insert(ProcessedEvent).values(
             event_id=event_id,
-            event_type=event["event_type"]
+            event_type=event["event"]
         )
     )
     await db.commit()
@@ -541,14 +538,17 @@ async def replay_events(start_date: datetime, end_date: datetime):
 
     # Republicar
     for event in events:
+        # Añadir flags de replay a los datos
+        replay_data = {
+            **event["data"],
+            "_replayed": True,
+            "_original_timestamp": event["timestamp"]
+        }
+
         await event_publisher.publish(
-            event_type=event["event_type"],
-            payload=event["payload"],
-            metadata={
-                **event.get("metadata", {}),
-                "replayed": True,
-                "original_timestamp": event["timestamp"]
-            }
+            event_name=event["event"],
+            data=replay_data,
+            organization_id=event["organization_id"]
         )
 ```
 

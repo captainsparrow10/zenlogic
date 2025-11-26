@@ -90,7 +90,7 @@ class AuditEventConsumer:
 
                 # Metrics
                 audit_events_consumed.labels(
-                    event_type=event.get("event_type", "unknown"),
+                    event_type=event.get("event", "unknown"),
                     status="success"
                 ).inc()
 
@@ -98,8 +98,8 @@ class AuditEventConsumer:
                 logger.info(
                     "Event stored",
                     extra={
-                        "event_type": event.get("event_type"),
-                        "event_id": event.get("metadata", {}).get("correlation_id")
+                        "event": event.get("event"),
+                        "organization_id": event.get("organization_id")
                     }
                 )
 
@@ -150,9 +150,8 @@ class AuditService:
             event: Evento completo con payload y metadata
         """
         # Generar event_id para idempotencia
-        event_id = event.get("metadata", {}).get("correlation_id")
-        if not event_id:
-            event_id = f"{event['event_type']}_{event['timestamp']}"
+        event_name = event.get("event")
+        event_id = f"{event_name}_{event['timestamp']}_{event.get('organization_id', 'global')}"
 
         # Verificar si ya existe (idempotencia)
         existing = await self.audit_repo.find_by_event_id(event_id)
@@ -160,18 +159,16 @@ class AuditService:
             logger.debug(f"Event {event_id} already exists, skipping")
             return existing
 
-        # Extraer datos del evento
+        # Extraer datos del evento (nuevo formato: event + data)
         audit_data = AuditLogCreate(
             event_id=event_id,
-            event_type=event["event_type"],
+            event_type=event_name,
             service=event["service"],
             version=event.get("version", "1.0"),
-            payload=event["payload"],
-            metadata=event.get("metadata", {}),
-            organization_id=event["payload"].get("organization_id"),
-            user_id=event.get("metadata", {}).get("user_id"),
-            ip_address=event.get("metadata", {}).get("ip_address"),
-            user_agent=event.get("metadata", {}).get("user_agent")
+            data=event["data"],
+            organization_id=event.get("organization_id"),
+            user_id=event["data"].get("created_by") or event["data"].get("user_id"),
+            timestamp=event["timestamp"]
         )
 
         # Almacenar
@@ -180,7 +177,7 @@ class AuditService:
         logger.info(
             f"Audit log created: {audit_log.id}",
             extra={
-                "event_type": audit_log.event_type,
+                "event": audit_log.event_type,
                 "organization_id": str(audit_log.organization_id) if audit_log.organization_id else None
             }
         )
