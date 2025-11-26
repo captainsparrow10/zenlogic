@@ -334,25 +334,21 @@ async def create_product(
 
 #### Event Payload
 
-**REGLA**: Estructura consistente con metadatos.
+**REGLA**: Estructura consistente con formato estandarizado.
 
 ```python
 event = {
-    "event_id": str(uuid4()),
-    "event_type": "catalog.product.created",
+    "event": "catalog.product.created",
     "timestamp": datetime.utcnow().isoformat(),
     "service": "catalog-service",
     "version": "1.0",
-    "payload": {
+    "organization_id": "org_xxx",
+    "data": {
         "product_id": "...",
-        "organization_id": "...",
         "name": "...",
-        "sku": "..."
-    },
-    "metadata": {
-        "user_id": "...",
-        "correlation_id": "...",
-        "causation_id": "..."
+        "sku": "...",
+        "created_by": "...",
+        "created_at": "..."
     }
 }
 ```
@@ -919,6 +915,13 @@ Antes de crear PR, verificar:
 
 ---
 
-**Última actualización**: 2025-11-23
-**Versión**: 1.0
+**Última actualización**: 2025-11-25
+**Versión**: 1.1
 **Mantenedor**: Equipo zenLogic
+
+## Changelog
+
+### v1.1 (2025-11-25)
+- Actualizado formato de eventos: `event` + `data` (antes: `event_type` + `payload`)
+- Eliminado campo `metadata` del evento (ahora integrado en estructura principal)
+- Agregado `organization_id` como campo obligatorio de primer nivel
