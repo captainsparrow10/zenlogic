@@ -525,20 +525,22 @@ class EventPublisher:
             durable=True
         )
 
-    async def publish(self, event_type: str, payload: dict):
+    async def publish(self, event_name: str, data: dict, organization_id: str):
         """
         Publica evento a RabbitMQ
         """
         message = {
-            "event_type": event_type,
-            "payload": payload,
+            "event": event_name,
             "timestamp": datetime.utcnow().isoformat(),
-            "service": "auth-service"
+            "service": "auth-service",
+            "version": "1.0",
+            "organization_id": organization_id,
+            "data": data
         }
 
         self.channel.basic_publish(
             exchange='auth_events',
-            routing_key=event_type,
+            routing_key=event_name,
             body=json.dumps(message),
             properties=pika.BasicProperties(
                 delivery_mode=2,  # persistent

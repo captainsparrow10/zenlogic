@@ -201,7 +201,7 @@ sequenceDiagram
 
 ## Decisiones Arquitectónicas Clave
 
-Las decisiones técnicas importantes están documentadas en la sección de [Architecture Decision Records (ADRs)](/decisiones-arquitectura/00-introduccion-adrs):
+Las decisiones técnicas importantes están documentadas en la sección de [Architecture Decision Records (ADRs)](/adrs/introduccion-adrs):
 
 - **Event-Driven en Auth Service**: Por qué Auth publica eventos
 - **Audit Service Independiente**: Por qué un servicio separado para auditoría

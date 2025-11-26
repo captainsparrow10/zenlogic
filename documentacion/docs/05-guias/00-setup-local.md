@@ -13,6 +13,7 @@ Guía completa para configurar el entorno de desarrollo local de zenLogic.
 ```bash
 # Versiones mínimas
 Python: 3.11+
+Poetry: 1.7+
 Node.js: 18+
 Docker: 20.10+
 Docker Compose: 2.0+
@@ -35,12 +36,21 @@ sudo apt install nodejs npm
 sudo apt install docker.io docker-compose
 sudo apt install git
 
+# Instalar Poetry (todos los sistemas)
+curl -sSL https://install.python-poetry.org | python3 -
+
+# Configurar Poetry (crear venv dentro del proyecto)
+poetry config virtualenvs.in-project true
+
 # Verificar instalaciones
 python3.11 --version
+poetry --version
 node --version
 docker --version
 git --version
 ```
+
+> **Nota**: Para más detalles sobre Poetry, ver [Poetry - Gestión de Dependencias](./05-poetry-setup.md)
 
 ## Clonar Repositorio
 
@@ -147,47 +157,21 @@ docker-compose logs -f
 
 ## Configuración de Auth Service
 
-### 1. Crear Virtual Environment
+### 1. Instalar Dependencias con Poetry
 
 ```bash
 cd services/auth-service
 
-# Crear virtualenv
-python3.11 -m venv venv
+# Instalar todas las dependencias (crea .venv automáticamente)
+poetry install
 
-# Activar
-source venv/bin/activate  # Linux/macOS
-# o
-venv\Scripts\activate     # Windows
-
-# Actualizar pip
-pip install --upgrade pip
+# Activar shell (opcional, para comandos interactivos)
+poetry shell
 ```
 
-### 2. Instalar Dependencias
+> Poetry lee el archivo `pyproject.toml` y crea automáticamente el virtualenv en `.venv/`
 
-```bash
-# Instalar desde requirements.txt
-pip install -r requirements.txt
-
-# O instalar manualmente las principales
-pip install fastapi==0.104.1
-pip install uvicorn[standard]==0.24.0
-pip install sqlalchemy[asyncio]==2.0.23
-pip install asyncpg==0.29.0
-pip install alembic==1.12.1
-pip install pydantic==2.5.0
-pip install pydantic-settings==2.1.0
-pip install python-jose[cryptography]==3.3.0
-pip install passlib[bcrypt]==1.7.4
-pip install aio-pika==9.3.0
-pip install aioredis==2.0.1
-pip install grpcio==1.59.3
-pip install grpcio-tools==1.59.3
-pip install prometheus-client==0.19.0
-```
-
-### 3. Configurar Variables de Entorno
+### 2. Configurar Variables de Entorno
 
 ```bash
 # Copiar template
@@ -227,7 +211,7 @@ DEBUG=true
 LOG_LEVEL=INFO
 ```
 
-### 4. Generar Claves RSA (para JWT)
+### 3. Generar Claves RSA (para JWT)
 
 ```bash
 # Generar clave privada
@@ -241,27 +225,27 @@ mkdir -p secrets
 mv private_key.pem public_key.pem secrets/
 ```
 
-### 5. Ejecutar Migraciones
+### 4. Ejecutar Migraciones
 
 ```bash
 # Inicializar Alembic (si no está inicializado)
-alembic init alembic
+poetry run alembic init alembic
 
 # Generar migración inicial
-alembic revision --autogenerate -m "initial schema"
+poetry run alembic revision --autogenerate -m "initial schema"
 
 # Aplicar migraciones
-alembic upgrade head
+poetry run alembic upgrade head
 
 # Verificar en PostgreSQL
 psql -U erp_user -d auth_db -c "\dt"
 ```
 
-### 6. Seed de Datos Iniciales
+### 5. Seed de Datos Iniciales
 
 ```bash
 # Ejecutar seed script
-python scripts/seed_data.py
+poetry run python scripts/seed_data.py
 ```
 
 ```python
@@ -312,28 +296,14 @@ if __name__ == "__main__":
     asyncio.run(seed())
 ```
 
-### 7. Iniciar Servidor
+### 6. Iniciar Servidor
 
 ```bash
 # Desarrollo (con hot reload)
-uvicorn app.main:app --reload --port 8001
+poetry run uvicorn app.main:app --reload --port 8001
 
-# O con script
-python run.py
-```
-
-```python
-# run.py
-import uvicorn
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8001,
-        reload=True,
-        log_level="info"
-    )
+# O con el script definido en pyproject.toml
+poetry run start
 ```
 
 ## Configuración de Catalog Service
@@ -341,10 +311,8 @@ if __name__ == "__main__":
 ```bash
 cd ../catalog-service
 
-# Mismo proceso que Auth Service
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Instalar dependencias con Poetry
+poetry install
 cp .env.example .env
 
 # Editar .env
@@ -368,10 +336,10 @@ DEBUG=true
 
 ```bash
 # Migraciones
-alembic upgrade head
+poetry run alembic upgrade head
 
 # Iniciar servidor
-uvicorn app.main:app --reload --port 8002
+poetry run uvicorn app.main:app --reload --port 8002
 ```
 
 ## Configuración de Audit Service
@@ -379,9 +347,8 @@ uvicorn app.main:app --reload --port 8002
 ```bash
 cd ../audit-service
 
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Instalar dependencias con Poetry
+poetry install
 cp .env.example .env
 ```
 
@@ -398,10 +365,10 @@ DEBUG=true
 
 ```bash
 # Migraciones
-alembic upgrade head
+poetry run alembic upgrade head
 
 # Iniciar servidor
-uvicorn app.main:app --reload --port 8003
+poetry run uvicorn app.main:app --reload --port 8003
 ```
 
 ## Verificación
@@ -435,17 +402,17 @@ Abrir en navegador:
 ## Testing
 
 ```bash
-# Instalar dependencias de testing
-pip install pytest pytest-asyncio pytest-cov httpx
+# Las dependencias de testing ya están en pyproject.toml (grupo dev)
+# Se instalaron con: poetry install
 
 # Ejecutar tests
-pytest
+poetry run pytest
 
 # Con coverage
-pytest --cov=app --cov-report=html
+poetry run pytest --cov=app --cov-report=html
 
 # Tests específicos
-pytest tests/test_auth.py -v
+poetry run pytest tests/test_auth.py -v
 ```
 
 ## Troubleshooting
@@ -466,24 +433,27 @@ docker-compose restart postgres
 ### Error: ModuleNotFoundError
 
 ```bash
-# Verificar que virtualenv esté activado
-which python  # Debe apuntar a venv/bin/python
+# Verificar que estás en el directorio correcto con pyproject.toml
+ls pyproject.toml
 
 # Reinstalar dependencias
-pip install -r requirements.txt
+poetry install
+
+# O ejecutar con poetry run para usar el venv correcto
+poetry run python -c "import app"
 ```
 
 ### Error: Alembic migration failed
 
 ```bash
 # Rollback
-alembic downgrade -1
+poetry run alembic downgrade -1
 
 # Revisar logs
-alembic history
+poetry run alembic history
 
 # Regenerar migración
-alembic revision --autogenerate -m "fix migration"
+poetry run alembic revision --autogenerate -m "fix migration"
 ```
 
 ## Scripts Útiles
@@ -502,18 +472,15 @@ sleep 5
 
 # Start Auth Service
 cd services/auth-service
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8001 &
+poetry run uvicorn app.main:app --reload --port 8001 &
 
 # Start Catalog Service
 cd ../catalog-service
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8002 &
+poetry run uvicorn app.main:app --reload --port 8002 &
 
 # Start Audit Service
 cd ../audit-service
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8003 &
+poetry run uvicorn app.main:app --reload --port 8003 &
 
 echo "All services started!"
 ```

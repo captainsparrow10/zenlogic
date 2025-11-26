@@ -52,11 +52,11 @@ Eventos que Customer Service publica a RabbitMQ.
 
 ## Loyalty Events
 
-### loyalty.points.earned
+### customer.loyalty.points_earned
 
 ```json
 {
-  "event": "loyalty.points.earned",
+  "event": "customer.loyalty.points_earned",
   "version": "1.0",
   "timestamp": "2025-11-24T12:00:00Z",
   "organization_id": "org_001",
@@ -74,11 +74,11 @@ Eventos que Customer Service publica a RabbitMQ.
 
 **Consumidores:** Analytics, Notification Service
 
-### loyalty.points.redeemed
+### customer.loyalty.points_redeemed
 
 ```json
 {
-  "event": "loyalty.points.redeemed",
+  "event": "customer.loyalty.points_redeemed",
   "version": "1.0",
   "timestamp": "2025-11-24T13:00:00Z",
   "organization_id": "org_001",
@@ -92,11 +92,11 @@ Eventos que Customer Service publica a RabbitMQ.
 }
 ```
 
-### loyalty.tier.upgraded
+### customer.loyalty.tier_upgraded
 
 ```json
 {
-  "event": "loyalty.tier.upgraded",
+  "event": "customer.loyalty.tier_upgraded",
   "version": "1.0",
   "timestamp": "2025-11-24T14:00:00Z",
   "organization_id": "org_001",
@@ -113,11 +113,11 @@ Eventos que Customer Service publica a RabbitMQ.
 
 ## Credit Events
 
-### credit.approved
+### customer.credit.approved
 
 ```json
 {
-  "event": "credit.approved",
+  "event": "customer.credit.approved",
   "version": "1.0",
   "timestamp": "2025-11-24T11:00:00Z",
   "organization_id": "org_001",
@@ -133,11 +133,11 @@ Eventos que Customer Service publica a RabbitMQ.
 
 **Consumidores:** Order Service (habilitar pago a crédito), Notification Service
 
-### credit.used
+### customer.credit.used
 
 ```json
 {
-  "event": "credit.used",
+  "event": "customer.credit.used",
   "version": "1.0",
   "timestamp": "2025-11-24T15:00:00Z",
   "organization_id": "org_001",
@@ -152,11 +152,11 @@ Eventos que Customer Service publica a RabbitMQ.
 }
 ```
 
-### credit.limit.exceeded
+### customer.credit.limit_exceeded
 
 ```json
 {
-  "event": "credit.limit.exceeded",
+  "event": "customer.credit.limit_exceeded",
   "version": "1.0",
   "timestamp": "2025-11-24T16:00:00Z",
   "organization_id": "org_001",
@@ -173,16 +173,18 @@ Eventos que Customer Service publica a RabbitMQ.
 
 ## Resumen de Eventos
 
-| Evento | Cuándo | Consumidores |
+| Evento (routing key) | Cuándo | Consumidores |
 |--------|--------|--------------|
 | `customer.created` | Nuevo cliente | Analytics |
 | `customer.updated` | Info actualizada | CRM, Analytics |
-| `loyalty.points.earned` | Puntos acumulados | Analytics, Notification |
-| `loyalty.points.redeemed` | Puntos canjeados | Analytics |
-| `loyalty.tier.upgraded` | Nivel mejorado | Pricing, Notification |
-| `credit.approved` | Crédito aprobado | Order, Notification |
-| `credit.used` | Crédito utilizado | Analytics |
-| `credit.limit.exceeded` | Límite excedido | Notification |
+| `customer.loyalty.points_earned` | Puntos acumulados | Analytics, Notification |
+| `customer.loyalty.points_redeemed` | Puntos canjeados | Analytics |
+| `customer.loyalty.tier_upgraded` | Nivel mejorado | Pricing, Notification |
+| `customer.credit.approved` | Crédito aprobado | Order, Notification |
+| `customer.credit.used` | Crédito utilizado | Analytics |
+| `customer.credit.limit_exceeded` | Límite excedido | Notification |
+
+> **Nota:** Todos los eventos siguen el patrón `customer.{entidad}.{accion}` según el estándar de mensajería del ERP.
 
 ## Próximos Pasos
 

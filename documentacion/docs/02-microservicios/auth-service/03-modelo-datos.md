@@ -4,6 +4,18 @@ sidebar_position: 4
 
 # Modelo de Datos
 
+## Estándares de Tipos de Datos
+
+> **Convención del ERP**: Todos los servicios usan tipos estandarizados para garantizar consistencia.
+>
+> | Tipo de Campo | Estándar | Descripción |
+> |---------------|----------|-------------|
+> | IDs primarios | `UUID` | Identificadores únicos universales |
+> | Foreign keys | `UUID` | Referencias entre tablas/servicios |
+> | Dinero | `DECIMAL(12,4)` | 12 dígitos, 4 decimales |
+> | Tasas (%) | `DECIMAL(5,4)` | Ej: 0.0700 = 7% |
+> | Cantidades | `DECIMAL(10,3)` | Para productos por peso |
+
 ## Diagrama de Entidad-Relación
 
 ```mermaid
@@ -27,19 +39,19 @@ erDiagram
     LOCALS ||--o{ USER_LOCALS : "accesible por"
 
     ORGANIZATIONS {
-        varchar id PK
+        uuid id PK
         varchar name
         varchar slug UK
         varchar plan
         varchar status
         jsonb limits
-        timestamp created_date
-        timestamp updated_date
+        timestamp created_at
+        timestamp updated_at
     }
 
     USERS {
-        varchar id PK
-        varchar organization_id FK
+        uuid id PK
+        uuid organization_id FK
         varchar email
         varchar password_hash
         varchar first_name
@@ -50,80 +62,80 @@ erDiagram
         boolean locked
         timestamp last_login_at
         timestamp password_changed_at
-        timestamp created_date
-        timestamp updated_date
+        timestamp created_at
+        timestamp updated_at
     }
 
     ROLES {
-        varchar id PK
-        varchar organization_id FK
+        uuid id PK
+        uuid organization_id FK
         varchar name
         varchar description
         boolean system_role
-        timestamp created_date
-        timestamp updated_date
+        timestamp created_at
+        timestamp updated_at
     }
 
     PERMISSIONS {
-        varchar id PK
-        varchar module_id FK
+        uuid id PK
+        uuid module_id FK
         varchar name
         varchar description
         varchar action
-        timestamp created_date
+        timestamp created_at
     }
 
     MODULES {
-        varchar id PK
+        uuid id PK
         varchar name
         varchar description
         boolean active
-        timestamp created_date
+        timestamp created_at
     }
 
     LOCALS {
-        varchar id PK
-        varchar organization_id FK
+        uuid id PK
+        uuid organization_id FK
         varchar name
         varchar code
         varchar address
         varchar status
-        timestamp created_date
-        timestamp updated_date
+        timestamp created_at
+        timestamp updated_at
     }
 
     USER_ROLES {
-        varchar user_id PK,FK
-        varchar role_id PK,FK
-        timestamp assigned_date
+        uuid user_id PK,FK
+        uuid role_id PK,FK
+        timestamp assigned_at
     }
 
     ROLE_PERMISSIONS {
-        varchar role_id PK,FK
-        varchar permission_id PK,FK
-        timestamp granted_date
+        uuid role_id PK,FK
+        uuid permission_id PK,FK
+        timestamp granted_at
     }
 
     USER_LOCALS {
-        varchar user_id PK,FK
-        varchar local_id PK,FK
-        timestamp assigned_date
+        uuid user_id PK,FK
+        uuid local_id PK,FK
+        timestamp assigned_at
     }
 
     ORGANIZATION_MODULES {
-        varchar organization_id PK,FK
-        varchar module_id PK,FK
-        timestamp enabled_date
+        uuid organization_id PK,FK
+        uuid module_id PK,FK
+        timestamp enabled_at
     }
 
     SESSIONS {
-        varchar id PK
-        varchar user_id FK
+        uuid id PK
+        uuid user_id FK
         varchar refresh_token UK
-        varchar ip_address
+        inet ip_address
         varchar user_agent
         timestamp expires_at
-        timestamp created_date
+        timestamp created_at
     }
 ```
 
@@ -135,14 +147,14 @@ Representa los tenants del sistema.
 
 ```sql
 CREATE TABLE organizations (
-    id VARCHAR(50) PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(200) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(20) NOT NULL,  -- 'basic', 'pro', 'enterprise'
     status VARCHAR(20) NOT NULL DEFAULT 'active',  -- 'active', 'suspended', 'inactive'
     limits JSONB,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP
 );
 
 CREATE INDEX idx_organizations_slug ON organizations(slug);
@@ -165,8 +177,8 @@ Usuarios del sistema.
 
 ```sql
 CREATE TABLE users (
-    id VARCHAR(50) PRIMARY KEY,
-    organization_id VARCHAR(50) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100),
@@ -177,8 +189,8 @@ CREATE TABLE users (
     locked BOOLEAN DEFAULT FALSE,
     last_login_at TIMESTAMP,  -- Última vez que el usuario se logueo
     password_changed_at TIMESTAMP,  -- Última vez que cambió su contraseña
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP,
 
     CONSTRAINT fk_users_organization
         FOREIGN KEY (organization_id)
@@ -212,13 +224,13 @@ Roles definidos por cada organización.
 
 ```sql
 CREATE TABLE roles (
-    id VARCHAR(50) PRIMARY KEY,
-    organization_id VARCHAR(50) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     system_role BOOLEAN DEFAULT FALSE,  -- Rol del sistema (no modificable)
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP,
 
     CONSTRAINT fk_roles_organization
         FOREIGN KEY (organization_id)
@@ -242,12 +254,12 @@ Permisos disponibles en el sistema.
 
 ```sql
 CREATE TABLE permissions (
-    id VARCHAR(50) PRIMARY KEY,
-    module_id VARCHAR(50) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_id UUID NOT NULL,
     name VARCHAR(100) UNIQUE NOT NULL,  -- 'catalog:read', 'inventory:edit'
     description TEXT,
     action VARCHAR(50),  -- 'read', 'create', 'edit', 'delete'
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT fk_permissions_module
         FOREIGN KEY (module_id)
@@ -273,11 +285,11 @@ Módulos del ERP.
 
 ```sql
 CREATE TABLE modules (
-    id VARCHAR(50) PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) UNIQUE NOT NULL,
     description TEXT,
     active BOOLEAN DEFAULT TRUE,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
 
@@ -294,14 +306,14 @@ Sucursales o ubicaciones físicas.
 
 ```sql
 CREATE TABLE locals (
-    id VARCHAR(50) PRIMARY KEY,
-    organization_id VARCHAR(50) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
     name VARCHAR(200) NOT NULL,
     code VARCHAR(50),
     address TEXT,
     status VARCHAR(20) DEFAULT 'active',  -- 'active', 'inactive'
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP,
 
     CONSTRAINT fk_locals_organization
         FOREIGN KEY (organization_id)
@@ -324,9 +336,9 @@ Asignación de roles a usuarios.
 
 ```sql
 CREATE TABLE user_roles (
-    user_id VARCHAR(50) NOT NULL,
-    role_id VARCHAR(50) NOT NULL,
-    assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id UUID NOT NULL,
+    role_id UUID NOT NULL,
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     PRIMARY KEY (user_id, role_id),
 
@@ -353,9 +365,9 @@ Permisos asignados a roles.
 
 ```sql
 CREATE TABLE role_permissions (
-    role_id VARCHAR(50) NOT NULL,
-    permission_id VARCHAR(50) NOT NULL,
-    granted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    role_id UUID NOT NULL,
+    permission_id UUID NOT NULL,
+    granted_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     PRIMARY KEY (role_id, permission_id),
 
@@ -380,9 +392,9 @@ Locales a los que un usuario tiene acceso.
 
 ```sql
 CREATE TABLE user_locals (
-    user_id VARCHAR(50) NOT NULL,
-    local_id VARCHAR(50) NOT NULL,
-    assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id UUID NOT NULL,
+    local_id UUID NOT NULL,
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     PRIMARY KEY (user_id, local_id),
 
@@ -407,9 +419,9 @@ Módulos habilitados por organización.
 
 ```sql
 CREATE TABLE organization_modules (
-    organization_id VARCHAR(50) NOT NULL,
-    module_id VARCHAR(50) NOT NULL,
-    enabled_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    organization_id UUID NOT NULL,
+    module_id UUID NOT NULL,
+    enabled_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     PRIMARY KEY (organization_id, module_id),
 
@@ -433,13 +445,13 @@ Sesiones de usuario (Refresh Tokens).
 
 ```sql
 CREATE TABLE sessions (
-    id VARCHAR(50) PRIMARY KEY,
-    user_id VARCHAR(50) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
     refresh_token TEXT UNIQUE NOT NULL,
-    ip_address VARCHAR(45),
+    ip_address INET,
     user_agent TEXT,
     expires_at TIMESTAMP NOT NULL,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT fk_sessions_user
         FOREIGN KEY (user_id)
@@ -458,14 +470,16 @@ CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 
 ```python
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String(50), primary_key=True)
-    organization_id = Column(String(50), ForeignKey("organizations.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
     email = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100))
@@ -474,10 +488,10 @@ class User(Base):
     phone = Column(String(20))
     active = Column(Boolean, default=True)
     locked = Column(Boolean, default=False)
-    last_login_at = Column(DateTime)
-    password_changed_at = Column(DateTime)
-    created_date = Column(DateTime, default=datetime.utcnow)
-    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime(timezone=True))
+    password_changed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
@@ -495,17 +509,17 @@ class User(Base):
 
     def get_locals(self) -> list[str]:
         """Retorna IDs de locales permitidos"""
-        return [local.id for local in self.locals]
+        return [str(local.id) for local in self.locals]
 
     def to_dict(self):
         return {
-            "id": self.id,
+            "id": str(self.id),
             "email": self.email,
             "first_name": self.first_name,
             "last_name": self.last_name,
             "full_name": self.full_name,
             "phone": self.phone,
-            "organization_id": self.organization_id,
+            "organization_id": str(self.organization_id),
             "active": self.active,
             "permissions": self.get_permissions(),
             "locals": self.get_locals(),
@@ -520,13 +534,13 @@ class User(Base):
 class Role(Base):
     __tablename__ = "roles"
 
-    id = Column(String(50), primary_key=True)
-    organization_id = Column(String(50), ForeignKey("organizations.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(String)
     system_role = Column(Boolean, default=False)
-    created_date = Column(DateTime, default=datetime.utcnow)
-    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
 
     # Relationships
     organization = relationship("Organization", back_populates="roles")

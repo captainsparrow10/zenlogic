@@ -1312,6 +1312,6 @@ pytest tests/unit/test_pricing_service.py::TestPricingService::test_calculate_pr
 
 ## Próximos Pasos
 
-- [Guía de Observabilidad](/testing/observability)
-- [Manejo de Errores](/testing/error-handling)
-- [Performance Testing](/testing/performance)
+- [Guía de Observabilidad](/observabilidad/guia-observabilidad) - Monitoring y logging
+- [Error Handling y Retry](/resiliencia/error-handling-retry) - Manejo de errores
+- [Docker Compose](/deployment/docker-compose) - Testing en contenedores

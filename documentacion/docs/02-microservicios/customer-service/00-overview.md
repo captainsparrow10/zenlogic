@@ -13,7 +13,6 @@ El **Customer Service** es el microservicio encargado de gestionar toda la infor
 ### Funcionalidades Core
 
 - **Gestión de Clientes**: CRUD completo de información de clientes (B2C y B2B)
-- **Programa de Lealtad**: Acumulación y redención de puntos, niveles de membresía
 - **Crédito Comercial**: Gestión de líneas de crédito para clientes B2B
 - **Segmentación**: Clasificación automática de clientes por comportamiento
 - **Historial de Compras**: Vista consolidada de todas las transacciones
@@ -26,6 +25,7 @@ El **Customer Service** es el microservicio encargado de gestionar toda la infor
 - **No procesa pagos**: Solo registra información de crédito disponible
 - **No crea órdenes**: Solo proporciona información para otros servicios
 - **No envía notificaciones directamente**: Publica eventos para Notification Service
+- **No gestiona programa de lealtad**: Los puntos, tiers y transacciones de lealtad se gestionan en [Pricing Service](/microservicios/pricing-service/overview). Customer Service solo almacena una referencia al tier actual para consultas rápidas.
 
 ## Casos de Uso por Tipo de Negocio
 
@@ -110,28 +110,27 @@ Gestionar el ciclo de vida completo de clientes, desde su registro hasta su fide
    - Gestionar direcciones múltiples
    - Sincronizar con sistemas externos (CRM)
 
-2. **Programa de Lealtad**
-   - Acumular puntos por compras
-   - Redimir puntos por descuentos
-   - Gestionar niveles de membresía (Bronze, Silver, Gold, Platinum)
-   - Calcular beneficios por nivel
-
-3. **Crédito Comercial**
+2. **Crédito Comercial**
    - Aprobar líneas de crédito
    - Validar disponibilidad de crédito
    - Registrar uso de crédito
    - Gestionar pagos y saldos
 
-4. **Segmentación**
+3. **Segmentación**
    - Clasificar clientes por comportamiento
    - RFM (Recency, Frequency, Monetary)
    - Identificar clientes VIP
    - Detectar riesgo de abandono
 
-5. **Historial y Analytics**
+4. **Historial y Analytics**
    - Consolidar historial de compras
    - Calcular métricas clave (LTV, AOV, frecuencia)
    - Generar insights de comportamiento
+
+5. **Sincronización de Lealtad**
+   - Mantener referencia al tier actual del cliente
+   - Consumir eventos de Pricing Service para actualizar tier
+   - Exponer tier actual para consultas rápidas
 
 ## Integraciones
 
@@ -147,34 +146,33 @@ Gestionar el ciclo de vida completo de clientes, desde su registro hasta su fide
 | Método | Consumidores | Propósito |
 |--------|--------------|-----------|
 | `GetCustomer()` | POS, Order, Pricing | Obtener info de cliente |
-| `AddLoyaltyPoints()` | POS, Order | Acumular puntos |
-| `RedeemLoyaltyPoints()` | POS, Pricing | Redimir puntos |
+| `GetCustomerLoyaltyTier()` | POS, Order | Obtener tier actual (referencia) |
 | `CheckCreditAvailability()` | Order | Validar crédito disponible |
 | `UseCreditLimit()` | Order | Usar crédito aprobado |
 | `GetCustomerSegment()` | Pricing, Marketing | Obtener segmento del cliente |
+
+> **Nota**: Para operaciones de lealtad (acumular/redimir puntos), los servicios deben comunicarse directamente con **Pricing Service**.
 
 ### Publica Eventos (RabbitMQ)
 
 | Evento | Exchange | Cuándo |
 |--------|----------|--------|
-| `customer.created` | `customer_events` | Nuevo cliente registrado |
-| `customer.updated` | `customer_events` | Información actualizada |
-| `customer.deleted` | `customer_events` | Cliente eliminado |
-| `loyalty.points.earned` | `customer_events` | Puntos acumulados |
-| `loyalty.points.redeemed` | `customer_events` | Puntos canjeados |
-| `loyalty.tier.upgraded` | `customer_events` | Cliente sube de nivel |
-| `credit.approved` | `customer_events` | Crédito aprobado |
-| `credit.used` | `customer_events` | Crédito utilizado |
-| `credit.limit.exceeded` | `customer_events` | Límite de crédito excedido |
-| `customer.segment.changed` | `customer_events` | Segmento actualizado |
+| `customer.created` | `erp.events` | Nuevo cliente registrado |
+| `customer.updated` | `erp.events` | Información actualizada |
+| `customer.deactivated` | `erp.events` | Cliente desactivado |
+| `customer.credit.approved` | `erp.events` | Crédito aprobado |
+| `customer.credit.limit_exceeded` | `erp.events` | Límite de crédito excedido |
+
+> **Nota**: Los eventos de lealtad (`loyalty.points.*`, `loyalty.tier.*`) son publicados por **Pricing Service**, no por Customer Service.
 
 ### Consume Eventos (RabbitMQ)
 
 | Evento | Acción |
 |--------|--------|
 | `order.completed` | Actualizar historial de compras, calcular métricas |
-| `pos.transaction.completed` | Actualizar puntos, registrar actividad |
-| `payment.received` | Liberar crédito utilizado |
+| `pos.transaction.completed` | Registrar actividad del cliente |
+| `pricing.loyalty.tier_changed` | Actualizar `loyalty_tier` del cliente |
+| `order.payment.succeeded` | Liberar crédito utilizado |
 
 ## Stack Tecnológico
 

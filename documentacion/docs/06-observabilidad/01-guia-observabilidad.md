@@ -264,11 +264,11 @@ class EventConsumer:
         """Procesar mensaje con logging completo."""
 
         event_id = message.get("event_id")
-        event_type = message.get("event_type")
+        event_name = message.get("event")
 
         log = logger.bind(
             event_id=event_id,
-            event_type=event_type,
+            event=event_name,
             organization_id=message.get("organization_id")
         )
 
@@ -284,11 +284,11 @@ class EventConsumer:
                 return
 
             # Procesar evento
-            handler = self.handlers.get(event_type)
+            handler = self.handlers.get(event_name)
             if not handler:
                 log.warning(
                     "event_handler_not_found",
-                    event_type=event_type
+                    event=event_name
                 )
                 return
 
@@ -572,13 +572,13 @@ class EventPublisher:
     ) -> None:
         """Publicar evento y registrar métrica."""
 
-        event_type = event.get("event_type")
+        event_name = event.get("event")
 
         await self._publish_to_rabbitmq(exchange, routing_key, event)
 
         # Incrementar contador
         events_published_total.labels(
-            event_type=event_type,
+            event_type=event_name,
             service=self.service_name
         ).inc()
 
@@ -594,7 +594,7 @@ class EventConsumer:
     async def handle_message(self, message: dict) -> None:
         """Procesar mensaje y registrar métricas."""
 
-        event_type = message.get("event_type")
+        event_name = message.get("event")
         start_time = time.time()
 
         try:
@@ -602,7 +602,7 @@ class EventConsumer:
 
             # Métrica de éxito
             events_consumed_total.labels(
-                event_type=event_type,
+                event_type=event_name,
                 service=self.service_name,
                 status="success"
             ).inc()
@@ -610,7 +610,7 @@ class EventConsumer:
         except Exception as e:
             # Métrica de error
             events_consumed_total.labels(
-                event_type=event_type,
+                event_type=event_name,
                 service=self.service_name,
                 status="error"
             ).inc()
@@ -620,7 +620,7 @@ class EventConsumer:
             # Duración
             duration = time.time() - start_time
             event_processing_duration_seconds.labels(
-                event_type=event_type
+                event_type=event_name
             ).observe(duration)
 ```
 
@@ -1178,6 +1178,6 @@ class EventPublisher:
 
 ## Próximos Pasos
 
-- [Manejo de Errores](/observabilidad/error-handling)
-- [Alerting Strategy](/observabilidad/alerting)
-- [Log Aggregation](/observabilidad/log-aggregation)
+- [Error Handling y Retry](/resiliencia/error-handling-retry) - Estrategias de manejo de errores
+- [Estrategia de Testing](/testing/estrategia-testing) - Testing con observabilidad
+- [Docker Compose](/deployment/docker-compose) - Despliegue con stack de observabilidad

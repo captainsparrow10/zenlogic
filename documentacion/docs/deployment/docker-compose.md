@@ -904,6 +904,5 @@ docker-compose exec order-service ping catalog-service
 
 ## Próximos Pasos
 
-- [Deployment en Producción](./deployment-produccion)
-- [Configuración de CI/CD](./ci-cd)
-- [Backup y Restore](./backup-restore)
+- [Guía de Setup Local](/guias/setup-local)
+- [Troubleshooting](/guias/troubleshooting)

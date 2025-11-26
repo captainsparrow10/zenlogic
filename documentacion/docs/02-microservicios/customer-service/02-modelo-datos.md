@@ -9,10 +9,8 @@ sidebar_position: 3
 ```mermaid
 erDiagram
     CUSTOMER ||--o{ ADDRESS : has
-    CUSTOMER ||--o| LOYALTY_ACCOUNT : has
     CUSTOMER ||--o| CREDIT_ACCOUNT : has
     CUSTOMER ||--|| CUSTOMER_SEGMENT : belongs_to
-    LOYALTY_ACCOUNT ||--o{ LOYALTY_TRANSACTION : records
     CREDIT_ACCOUNT ||--o{ CREDIT_USAGE : tracks
     CREDIT_ACCOUNT ||--o{ CREDIT_PAYMENT : receives
 
@@ -28,6 +26,7 @@ erDiagram
         string document_number UK
         date birth_date
         enum status
+        string loyalty_tier
         jsonb metadata
         timestamp created_at
     }
@@ -43,26 +42,6 @@ erDiagram
         string postal_code
         string country
         boolean is_default
-        timestamp created_at
-    }
-
-    LOYALTY_ACCOUNT {
-        uuid loyalty_account_id PK
-        uuid customer_id FK
-        int points_balance
-        int lifetime_points
-        enum tier
-        date tier_expires_at
-        timestamp created_at
-    }
-
-    LOYALTY_TRANSACTION {
-        uuid transaction_id PK
-        uuid loyalty_account_id FK
-        enum transaction_type
-        int points
-        string reference_id
-        string description
         timestamp created_at
     }
 
@@ -110,6 +89,14 @@ erDiagram
     }
 ```
 
+## Nota sobre Programa de Lealtad
+
+> **El programa de lealtad (puntos, tiers, transacciones) se gestiona en [Pricing Service](/microservicios/pricing-service/modelo-datos).**
+>
+> Customer Service solo almacena una referencia al tier actual del cliente (`loyalty_tier`) para consultas rápidas. Esta referencia se actualiza automáticamente cuando Pricing Service publica el evento `pricing.loyalty.tier_changed`.
+>
+> Para información completa sobre puntos, historial de transacciones de lealtad, y reglas de programas, consultar la documentación de Pricing Service.
+
 ## Entidades Principales
 
 ### 1. Customer (customers)
@@ -139,6 +126,9 @@ CREATE TABLE customers (
     -- Estado
     status VARCHAR(20) NOT NULL DEFAULT 'active',
 
+    -- Referencia a lealtad (fuente: Pricing Service)
+    loyalty_tier VARCHAR(20) DEFAULT 'bronze',
+
     -- Preferencias
     preferred_language VARCHAR(10) DEFAULT 'es',
     marketing_consent BOOLEAN DEFAULT false,
@@ -159,6 +149,9 @@ CREATE TABLE customers (
     CONSTRAINT check_status CHECK (
         status IN ('active', 'inactive', 'blocked')
     ),
+    CONSTRAINT check_loyalty_tier CHECK (
+        loyalty_tier IN ('bronze', 'silver', 'gold', 'platinum')
+    ),
     CONSTRAINT unique_org_email UNIQUE (organization_id, email),
     CONSTRAINT unique_org_document UNIQUE (organization_id, document_number)
 );
@@ -168,79 +161,11 @@ CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE INDEX idx_customers_document ON customers(document_number);
 CREATE INDEX idx_customers_status ON customers(status);
+CREATE INDEX idx_customers_loyalty_tier ON customers(loyalty_tier);
 CREATE INDEX idx_customers_last_purchase ON customers(last_purchase_at DESC);
 ```
 
-### 2. LoyaltyAccount (loyalty_accounts)
-
-```sql
-CREATE TABLE loyalty_accounts (
-    loyalty_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id UUID NOT NULL UNIQUE REFERENCES customers(customer_id),
-    organization_id UUID NOT NULL,
-
-    -- Puntos
-    points_balance INTEGER NOT NULL DEFAULT 0 CHECK (points_balance >= 0),
-    lifetime_points INTEGER NOT NULL DEFAULT 0,
-    points_redeemed INTEGER NOT NULL DEFAULT 0,
-
-    -- Nivel de membresía
-    tier VARCHAR(20) NOT NULL DEFAULT 'bronze',
-    tier_since DATE,
-    tier_expires_at DATE,
-
-    -- Estadísticas
-    total_purchases INTEGER DEFAULT 0,
-    total_spent DECIMAL(12, 2) DEFAULT 0.00,
-
-    -- Timestamps
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-
-    CONSTRAINT check_tier CHECK (
-        tier IN ('bronze', 'silver', 'gold', 'platinum')
-    )
-);
-
-CREATE INDEX idx_loyalty_customer ON loyalty_accounts(customer_id);
-CREATE INDEX idx_loyalty_tier ON loyalty_accounts(tier);
-```
-
-### 3. LoyaltyTransaction (loyalty_transactions)
-
-```sql
-CREATE TABLE loyalty_transactions (
-    transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    loyalty_account_id UUID NOT NULL REFERENCES loyalty_accounts(loyalty_account_id),
-
-    -- Tipo de transacción
-    transaction_type VARCHAR(20) NOT NULL,
-
-    -- Puntos
-    points INTEGER NOT NULL,
-
-    -- Referencia
-    reference_type VARCHAR(50),
-    reference_id VARCHAR(255),
-    description TEXT,
-
-    -- Metadata
-    metadata JSONB,
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_transaction_type CHECK (
-        transaction_type IN ('earn', 'redeem', 'expire', 'adjust', 'bonus')
-    )
-);
-
-CREATE INDEX idx_loyalty_txn_account ON loyalty_transactions(loyalty_account_id);
-CREATE INDEX idx_loyalty_txn_type ON loyalty_transactions(transaction_type);
-CREATE INDEX idx_loyalty_txn_created ON loyalty_transactions(created_at DESC);
-CREATE INDEX idx_loyalty_txn_reference ON loyalty_transactions(reference_id);
-```
-
-### 4. CreditAccount (credit_accounts)
+### 2. CreditAccount (credit_accounts)
 
 ```sql
 CREATE TABLE credit_accounts (
@@ -281,6 +206,67 @@ CREATE TABLE credit_accounts (
 CREATE INDEX idx_credit_customer ON credit_accounts(customer_id);
 CREATE INDEX idx_credit_status ON credit_accounts(status);
 CREATE INDEX idx_credit_approved_by ON credit_accounts(approved_by);
+```
+
+### 3. CreditUsage (credit_usages)
+
+```sql
+CREATE TABLE credit_usages (
+    usage_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    credit_account_id UUID NOT NULL REFERENCES credit_accounts(credit_account_id),
+    order_id UUID NOT NULL,
+
+    -- Monto
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+
+    -- Estado
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+    -- Fechas
+    due_date DATE NOT NULL,
+    paid_at TIMESTAMP,
+
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT check_usage_status CHECK (
+        status IN ('pending', 'paid', 'overdue', 'cancelled')
+    )
+);
+
+CREATE INDEX idx_credit_usage_account ON credit_usages(credit_account_id);
+CREATE INDEX idx_credit_usage_order ON credit_usages(order_id);
+CREATE INDEX idx_credit_usage_status ON credit_usages(status);
+CREATE INDEX idx_credit_usage_due_date ON credit_usages(due_date);
+```
+
+### 4. CreditPayment (credit_payments)
+
+```sql
+CREATE TABLE credit_payments (
+    payment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    credit_account_id UUID NOT NULL REFERENCES credit_accounts(credit_account_id),
+
+    -- Monto
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+
+    -- Referencia de pago
+    payment_method VARCHAR(30) NOT NULL,
+    payment_reference VARCHAR(255),
+
+    -- Fecha
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT check_payment_method CHECK (
+        payment_method IN ('cash', 'card', 'transfer', 'check')
+    )
+);
+
+CREATE INDEX idx_credit_payment_account ON credit_payments(credit_account_id);
+CREATE INDEX idx_credit_payment_date ON credit_payments(payment_date DESC);
 ```
 
 ### 5. Address (addresses)
@@ -378,10 +364,8 @@ SELECT
     c.customer_type,
     c.status,
 
-    -- Loyalty
-    la.points_balance,
-    la.tier,
-    la.lifetime_points,
+    -- Loyalty (referencia, datos completos en Pricing Service)
+    c.loyalty_tier,
 
     -- Credit
     ca.credit_limit,
@@ -397,9 +381,31 @@ SELECT
     c.last_purchase_at,
     c.created_at
 FROM customers c
-LEFT JOIN loyalty_accounts la ON c.customer_id = la.customer_id
 LEFT JOIN credit_accounts ca ON c.customer_id = ca.customer_id
 LEFT JOIN customer_segments cs ON c.customer_id = cs.customer_id;
+```
+
+## Sincronización con Pricing Service
+
+Customer Service consume el evento `pricing.loyalty.tier_changed` para mantener sincronizado el campo `loyalty_tier`:
+
+```python
+@consumer.on("pricing.loyalty.tier_changed")
+async def handle_tier_changed(event: dict):
+    """Actualizar tier del cliente cuando Pricing notifica cambio."""
+    data = event["data"]
+
+    await db.execute(
+        """
+        UPDATE customers
+        SET loyalty_tier = :new_tier, updated_at = NOW()
+        WHERE customer_id = :customer_id
+        """,
+        {
+            "customer_id": data["customer_id"],
+            "new_tier": data["new_tier"]
+        }
+    )
 ```
 
 ## Row-Level Security
@@ -414,4 +420,4 @@ CREATE POLICY customers_organization_isolation ON customers
 ## Próximos Pasos
 
 - [API de Clientes](./03-api-customers.md)
-- [API de Lealtad](./04-api-loyalty.md)
+- [Pricing Service - Loyalty](/microservicios/pricing-service/modelo-datos)

@@ -410,20 +410,17 @@ raise HTTPException(
 ```python
 # ✅ Estructura consistente
 event = {
-    "event_id": str(uuid4()),
-    "event_type": "catalog.product.created",
+    "event": "catalog.product.created",
     "timestamp": datetime.utcnow().isoformat(),
     "service": "catalog-service",
     "version": "1.0",
-    "payload": {
+    "organization_id": "...",
+    "data": {
         "product_id": "...",
-        "organization_id": "...",
         "name": "...",
-        "sku": "..."
-    },
-    "metadata": {
-        "user_id": "...",
-        "correlation_id": "..."
+        "sku": "...",
+        "created_by": "...",
+        "created_at": "..."
     }
 }
 ```

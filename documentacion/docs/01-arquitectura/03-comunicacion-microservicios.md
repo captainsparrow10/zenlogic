@@ -176,6 +176,76 @@ async def handle_user_deactivated(event):
 | **Tooling** | Curl, Postman | grpcurl, BloomRPC |
 | **Uso en proyecto** | Frontend → Backend | Backend ↔ Backend |
 
+## Política de Uso: Cuándo usar cada protocolo
+
+### SIEMPRE usar REST
+
+| Escenario | Razón |
+|-----------|-------|
+| Frontend (Web/Mobile) → API | Compatibilidad con navegadores |
+| APIs públicas o externas | Estándar universal, fácil integración |
+| Webhooks entrantes | Interoperabilidad |
+| Documentación requerida (Swagger) | OpenAPI es REST nativo |
+| Debugging frecuente | JSON legible |
+
+### SIEMPRE usar gRPC
+
+| Escenario | Razón |
+|-----------|-------|
+| Validación de tokens entre servicios | Alta frecuencia, baja latencia |
+| Consultas de precio en POS | Rendimiento crítico |
+| Verificación de stock en tiempo real | Milisegundos importan |
+| Streaming de datos (logs, métricas) | HTTP/2 streaming |
+| Comunicación interna frecuente | Menor overhead |
+
+### Servicios gRPC Expuestos (Completo)
+
+| Servicio | Método gRPC | Consumidores | Propósito |
+|----------|-------------|--------------|-----------|
+| **Auth Service** | `VerifyToken()` | Todos | Validar JWT |
+| **Auth Service** | `GetUserPermissions()` | Todos | Obtener permisos |
+| **Auth Service** | `GetOrganization()` | Todos | Info de tenant |
+| **Pricing Service** | `GetPrice()` | POS, Order | Precio de venta |
+| **Pricing Service** | `GetPricesBatch()` | POS, Order | Precios en lote |
+| **Pricing Service** | `CheckLoyaltyPoints()` | POS, Order | Saldo de puntos |
+| **Pricing Service** | `AddLoyaltyPoints()` | POS, Order | Acumular puntos |
+| **Pricing Service** | `RedeemLoyaltyPoints()` | POS, Order | Canjear puntos |
+| **Inventory Service** | `CheckStock()` | POS, Order | Verificar disponibilidad |
+| **Inventory Service** | `ReserveStock()` | Order | Reservar stock |
+| **Inventory Service** | `ReleaseStock()` | Order | Liberar reserva |
+| **Customer Service** | `GetCustomer()` | POS, Order | Info de cliente |
+| **Customer Service** | `GetCustomerLoyaltyTier()` | POS, Pricing | Tier de lealtad |
+| **Customer Service** | `CheckCreditAvailability()` | Order | Validar crédito |
+
+### Decisión por tipo de operación
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ÁRBOL DE DECISIÓN                                     │
+│                                                                              │
+│  ¿Es una llamada desde el frontend?                                         │
+│     → SÍ → Usar REST                                                         │
+│     → NO ↓                                                                   │
+│                                                                              │
+│  ¿Es comunicación entre microservicios?                                     │
+│     → SÍ ↓                                                                   │
+│                                                                              │
+│  ¿Requiere respuesta inmediata y es frecuente (>100 calls/min)?            │
+│     → SÍ → Usar gRPC                                                         │
+│     → NO ↓                                                                   │
+│                                                                              │
+│  ¿Puede ser asíncrono (no necesita respuesta inmediata)?                    │
+│     → SÍ → Usar Eventos (RabbitMQ)                                          │
+│     → NO → Usar REST (simplicidad) o gRPC (rendimiento)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Excepciones Permitidas
+
+1. **REST entre servicios**: Permitido para operaciones poco frecuentes o debugging
+2. **gRPC con fallback a REST**: Para alta disponibilidad
+3. **Eventos para operaciones síncronas**: NUNCA (usar para notificaciones, no queries)
+
 ## Circuit Breaker
 
 Para prevenir cascading failures cuando un servicio falla:
@@ -260,5 +330,5 @@ Audit Service: req_9912ABCD - Registrando auditoría
 
 - [Auth Service - gRPC Server](/microservicios/auth-service/grpc-server)
 - [Catalog Service - gRPC Client](/microservicios/catalog-service/auth-client-grpc)
-- [ADR-004: Comunicación Híbrida](/decisiones-arquitectura/adr-004-comunicacion-hibrida)
-- [Integraciones - gRPC Proto Files](/integraciones/02-grpc-proto-files)
+- [ADR-004: gRPC Internal Communication](/adrs/adr-004-grpc-internal)
+- [Integraciones - gRPC](/integraciones/grpc)

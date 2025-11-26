@@ -4,6 +4,19 @@ sidebar_position: 3
 
 # Modelo de Datos
 
+## Estándares de Tipos de Datos
+
+> **Convención del ERP**: Todos los servicios usan tipos estandarizados para garantizar consistencia.
+>
+> | Tipo de Campo | Estándar | Descripción |
+> |---------------|----------|-------------|
+> | IDs primarios | `UUID` | Identificadores únicos universales |
+> | Dinero | `DECIMAL(12,4)` | 12 dígitos, 4 decimales |
+> | Tasas (%) | `DECIMAL(5,4)` | Ej: 0.0700 = 7% |
+> | Cantidades | `DECIMAL(10,3)` | Para productos por peso |
+>
+> **Nota sobre cantidades**: Inventory Service usa `DECIMAL(10,3)` para cantidades para soportar productos vendidos por peso (kg, lb). Para productos unitarios, el valor se almacena como entero con 3 decimales en 0 (ej: 5.000).
+
 Esquema completo de base de datos del Inventory Service con 6 entidades principales y soporte para multi-tenancy, lot tracking y serial tracking.
 
 ## Diagrama ER Completo
@@ -27,14 +40,14 @@ erDiagram
         uuid variant_id FK "Catalog Service"
         uuid warehouse_id FK
         uuid location_id FK "nullable"
-        integer total_quantity
-        integer available_quantity
-        integer reserved_quantity
-        integer damaged_quantity
-        integer in_transit_quantity
-        integer min_stock
-        integer max_stock
-        integer reorder_point
+        decimal total_quantity "DECIMAL(10,3)"
+        decimal available_quantity "DECIMAL(10,3)"
+        decimal reserved_quantity "DECIMAL(10,3)"
+        decimal damaged_quantity "DECIMAL(10,3)"
+        decimal in_transit_quantity "DECIMAL(10,3)"
+        decimal min_stock "DECIMAL(10,3)"
+        decimal max_stock "DECIMAL(10,3)"
+        decimal reorder_point "DECIMAL(10,3)"
         string stock_strategy "FIFO,LIFO,FEFO"
         integer version
         boolean track_lots
@@ -49,9 +62,9 @@ erDiagram
         uuid organization_id FK
         uuid stock_id FK
         string type "in,out,transfer,adjustment"
-        integer quantity_before
-        integer quantity_after
-        integer quantity_change
+        decimal quantity_before "DECIMAL(10,3)"
+        decimal quantity_after "DECIMAL(10,3)"
+        decimal quantity_change "DECIMAL(10,3)"
         string lot_number "nullable"
         string serial_number "nullable"
         date expiry_date "nullable"
@@ -186,17 +199,17 @@ CREATE TABLE stock (
     warehouse_id UUID NOT NULL REFERENCES warehouses(warehouse_id),
     location_id UUID REFERENCES warehouse_locations(location_id),
 
-    -- Cantidades
-    total_quantity INTEGER NOT NULL DEFAULT 0,
-    available_quantity INTEGER NOT NULL DEFAULT 0,
-    reserved_quantity INTEGER NOT NULL DEFAULT 0,
-    damaged_quantity INTEGER NOT NULL DEFAULT 0,
-    in_transit_quantity INTEGER NOT NULL DEFAULT 0,
+    -- Cantidades (DECIMAL(10,3) para soportar productos por peso)
+    total_quantity DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    available_quantity DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    reserved_quantity DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    damaged_quantity DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    in_transit_quantity DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
 
     -- Control de stock
-    min_stock INTEGER NOT NULL DEFAULT 0,
-    max_stock INTEGER NOT NULL DEFAULT 0,
-    reorder_point INTEGER NOT NULL DEFAULT 0,  -- Punto de reorden (cuando disparar compra automática)
+    min_stock DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    max_stock DECIMAL(10, 3) NOT NULL DEFAULT 0.000,
+    reorder_point DECIMAL(10, 3) NOT NULL DEFAULT 0.000,  -- Punto de reorden (cuando disparar compra automática)
     stock_strategy VARCHAR(10) NOT NULL DEFAULT 'FIFO',
 
     -- Optimistic locking
@@ -252,11 +265,11 @@ CREATE TABLE stock_movements (
     organization_id UUID NOT NULL,
     stock_id UUID NOT NULL REFERENCES stock(stock_id),
 
-    -- Tipo y cantidades
+    -- Tipo y cantidades (DECIMAL(10,3) para soportar productos por peso)
     type VARCHAR(20) NOT NULL,  -- 'in', 'out', 'transfer', 'adjustment'
-    quantity_before INTEGER NOT NULL,
-    quantity_after INTEGER NOT NULL,
-    quantity_change INTEGER NOT NULL,
+    quantity_before DECIMAL(10, 3) NOT NULL,
+    quantity_after DECIMAL(10, 3) NOT NULL,
+    quantity_change DECIMAL(10, 3) NOT NULL,
 
     -- Tracking
     lot_number VARCHAR(100),

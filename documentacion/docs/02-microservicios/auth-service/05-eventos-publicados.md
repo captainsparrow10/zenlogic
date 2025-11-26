@@ -20,12 +20,13 @@ Todos los eventos siguen este formato estándar:
 
 ```json
 {
-  "event_type": "auth.user.created",
+  "event": "auth.user.created",
   "timestamp": "2025-11-23T10:30:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     ...
   }
 }
@@ -39,12 +40,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.user.created",
+  "event": "auth.user.created",
   "timestamp": "2025-11-23T10:30:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "email": "user@example.com",
     "first_name": "Juan",
     "last_name": "Pérez",
@@ -65,12 +67,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.user.updated",
+  "event": "auth.user.updated",
   "timestamp": "2025-11-23T10:35:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "changes": {
       "email": {"old": "old@example.com", "new": "new@example.com"},
       "roles": {"added": ["role_manager"], "removed": []}
@@ -85,12 +88,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.user.deactivated",
+  "event": "auth.user.deactivated",
   "timestamp": "2025-11-23T10:40:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "reason": "manual"  // "manual", "too_many_attempts"
   }
 }
@@ -106,12 +110,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.user.deleted",
+  "event": "auth.user.deleted",
   "timestamp": "2025-11-23T10:45:00Z",
   "service": "auth-service",
-  "payload": {
-    "user_id": "user_001",
-    "organization_id": "org_123"
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
+    "user_id": "user_001"
   }
 }
 ```
@@ -122,12 +127,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.user.password_changed",
+  "event": "auth.user.password_changed",
   "timestamp": "2025-11-23T10:50:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "changed_by": "user_001"  // self-change
   }
 }
@@ -145,12 +151,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.role.created",
+  "event": "auth.role.created",
   "timestamp": "2025-11-23T11:00:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "role_id": "role_custom_01",
-    "organization_id": "org_123",
     "name": "Gerente de Ventas",
     "permissions": ["catalog:read", "orders:create"]
   }
@@ -163,12 +170,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.role.permissions_changed",
+  "event": "auth.role.permissions_changed",
   "timestamp": "2025-11-23T11:05:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "role_id": "role_custom_01",
-    "organization_id": "org_123",
     "permissions": {
       "added": ["catalog:edit"],
       "removed": []
@@ -188,11 +196,12 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.organization.created",
+  "event": "auth.organization.created",
   "timestamp": "2025-11-23T11:10:00Z",
   "service": "auth-service",
-  "payload": {
-    "organization_id": "org_456",
+  "version": "1.0",
+  "organization_id": "org_456",
+  "data": {
     "name": "Nueva Empresa S.A.",
     "slug": "nueva-empresa",
     "plan": "pro",
@@ -207,11 +216,12 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.organization.module_enabled",
+  "event": "auth.organization.module_enabled",
   "timestamp": "2025-11-23T11:15:00Z",
   "service": "auth-service",
-  "payload": {
-    "organization_id": "org_123",
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "module_id": "module_pricing",
     "module_name": "Precios"
   }
@@ -224,11 +234,12 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.organization.suspended",
+  "event": "auth.organization.suspended",
   "timestamp": "2025-11-23T11:20:00Z",
   "service": "auth-service",
-  "payload": {
-    "organization_id": "org_123",
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "reason": "payment_failure"
   }
 }
@@ -245,12 +256,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.local.created",
+  "event": "auth.local.created",
   "timestamp": "2025-11-23T11:25:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "local_id": "local_03",
-    "organization_id": "org_123",
     "name": "Sucursal Norte",
     "code": "SN-03"
   }
@@ -268,12 +280,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.session.created",
+  "event": "auth.session.created",
   "timestamp": "2025-11-23T11:30:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "session_id": "session_abc123",
     "ip_address": "192.168.1.100",
     "user_agent": "Mozilla/5.0..."
@@ -290,12 +303,13 @@ Publicado cuando se crea un nuevo usuario.
 
 ```json
 {
-  "event_type": "auth.session.revoked",
+  "event": "auth.session.revoked",
   "timestamp": "2025-11-23T12:00:00Z",
   "service": "auth-service",
-  "payload": {
+  "version": "1.0",
+  "organization_id": "org_123",
+  "data": {
     "user_id": "user_001",
-    "organization_id": "org_123",
     "session_id": "session_abc123",
     "reason": "logout"  // "logout", "expired", "revoked"
   }
@@ -315,8 +329,8 @@ import json
 def callback(ch, method, properties, body):
     event = json.loads(body)
 
-    if event["event_type"] == "auth.user.deactivated":
-        user_id = event["payload"]["user_id"]
+    if event["event"] == "auth.user.deactivated":
+        user_id = event["data"]["user_id"]
         # Invalidar cache
         await cache.delete(f"user:{user_id}")
         logger.info(f"Cache invalidated for user {user_id}")

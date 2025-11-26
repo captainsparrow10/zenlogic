@@ -64,6 +64,83 @@ sidebar_position: 8
 
 **Consumidores:** POS Service (invalidar cache), Catalog Service
 
+### pricing.coupon.redeemed
+
+```json
+{
+  "event": "pricing.coupon.redeemed",
+  "version": "1.0",
+  "timestamp": "2025-11-24T14:00:00Z",
+  "organization_id": "org_001",
+  "data": {
+    "coupon_id": "coupon_001",
+    "coupon_code": "SAVE10",
+    "customer_id": "cust_123",
+    "order_id": "order_456",
+    "discount_applied": 10.00,
+    "discount_type": "percentage"
+  }
+}
+```
+
+**Consumidores:** Analytics, Customer Service
+
+### pricing.loyalty.points_earned
+
+```json
+{
+  "event": "pricing.loyalty.points_earned",
+  "version": "1.0",
+  "timestamp": "2025-11-24T15:00:00Z",
+  "organization_id": "org_001",
+  "data": {
+    "customer_id": "cust_123",
+    "transaction_id": "loy_txn_001",
+    "points_earned": 100,
+    "points_balance": 550,
+    "tier": "silver",
+    "reference_type": "purchase",
+    "reference_id": "order_789"
+  }
+}
+```
+
+**Consumidores:** Customer Service (actualizar tier), Notification Service
+
+### pricing.loyalty.points_redeemed
+
+```json
+{
+  "event": "pricing.loyalty.points_redeemed",
+  "version": "1.0",
+  "timestamp": "2025-11-24T16:00:00Z",
+  "organization_id": "org_001",
+  "data": {
+    "customer_id": "cust_123",
+    "transaction_id": "loy_txn_002",
+    "points_redeemed": 100,
+    "points_balance": 450,
+    "discount_value": 1.00,
+    "order_id": "order_789"
+  }
+}
+```
+
+**Consumidores:** Customer Service, Analytics
+
+## Resumen de Eventos
+
+| Evento | Cuándo | Consumidores |
+|--------|--------|--------------|
+| `pricing.promotion.activated` | Promoción iniciada | POS, Catalog, Notification |
+| `pricing.promotion.deactivated` | Promoción finalizada | POS, Catalog |
+| `pricing.price.updated` | Precio modificado | POS, Catalog |
+| `pricing.coupon.redeemed` | Cupón canjeado | Analytics, Customer |
+| `pricing.loyalty.points_earned` | Puntos acumulados | Customer, Notification |
+| `pricing.loyalty.points_redeemed` | Puntos canjeados | Customer, Analytics |
+
+> **Nota:** Pricing Service es la fuente única de verdad para precios, promociones y programa de lealtad (puntos).
+
 ## Próximos Pasos
 
 - [Eventos Consumidos](./08-eventos-consumidos.md)

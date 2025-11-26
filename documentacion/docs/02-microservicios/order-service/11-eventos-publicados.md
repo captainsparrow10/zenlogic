@@ -171,11 +171,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 
 ## Payment Events
 
-### payment.pending
+### order.payment.pending
 
 ```json
 {
-  "event": "payment.pending",
+  "event": "order.payment.pending",
   "data": {
     "payment_id": "pay_123",
     "order_id": "order_456",
@@ -187,11 +187,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### payment.succeeded
+### order.payment.succeeded
 
 ```json
 {
-  "event": "payment.succeeded",
+  "event": "order.payment.succeeded",
   "data": {
     "payment_id": "pay_123",
     "order_id": "order_456",
@@ -203,11 +203,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### payment.failed
+### order.payment.failed
 
 ```json
 {
-  "event": "payment.failed",
+  "event": "order.payment.failed",
   "data": {
     "payment_id": "pay_123",
     "order_id": "order_456",
@@ -218,11 +218,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### payment.refunded
+### order.payment.refunded
 
 ```json
 {
-  "event": "payment.refunded",
+  "event": "order.payment.refunded",
   "data": {
     "payment_id": "pay_123",
     "order_id": "order_456",
@@ -235,11 +235,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 
 ## Shipment Events
 
-### shipment.created
+### order.shipment.created
 
 ```json
 {
-  "event": "shipment.created",
+  "event": "order.shipment.created",
   "data": {
     "shipment_id": "ship_789",
     "order_id": "order_456",
@@ -250,11 +250,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### shipment.label_created
+### order.shipment.label_created
 
 ```json
 {
-  "event": "shipment.label_created",
+  "event": "order.shipment.label_created",
   "data": {
     "shipment_id": "ship_789",
     "tracking_number": "123456789",
@@ -264,11 +264,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### shipment.dispatched
+### order.shipment.dispatched
 
 ```json
 {
-  "event": "shipment.dispatched",
+  "event": "order.shipment.dispatched",
   "data": {
     "shipment_id": "ship_789",
     "dispatched_at": "2025-11-24T10:00:00Z",
@@ -277,11 +277,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### shipment.in_transit
+### order.shipment.in_transit
 
 ```json
 {
-  "event": "shipment.in_transit",
+  "event": "order.shipment.in_transit",
   "data": {
     "shipment_id": "ship_789",
     "tracking_number": "123456789",
@@ -291,11 +291,11 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 }
 ```
 
-### shipment.delivered
+### order.shipment.delivered
 
 ```json
 {
-  "event": "shipment.delivered",
+  "event": "order.shipment.delivered",
   "data": {
     "shipment_id": "ship_789",
     "delivered_at": "2025-11-26T14:30:00Z",
@@ -530,16 +530,18 @@ Publicado cuando se coloca una orden (antes de confirmación de pago). Inventory
 
 ## Resumen de Eventos
 
-| Categoría | Total | Eventos |
+| Categoría | Total | Eventos (routing key) |
 |-----------|-------|---------|
-| Orders | 7 | created, placed, confirmed, cancelled, processing, shipped, delivered |
-| Payments | 4 | pending, succeeded, failed, refunded |
-| Shipments | 5 | created, label_created, dispatched, in_transit, delivered |
-| Returns | 4 | requested, approved, received, refunded |
-| Cart | 4 | created, item_added, abandoned, converted |
-| Fulfillment | 3 | started, item_picked, packed |
-| Invoices | 2 | created, sent |
+| Orders | 7 | `order.created`, `order.placed`, `order.confirmed`, `order.cancelled`, `order.processing`, `order.shipped`, `order.delivered` |
+| Payments | 4 | `order.payment.pending`, `order.payment.succeeded`, `order.payment.failed`, `order.payment.refunded` |
+| Shipments | 5 | `order.shipment.created`, `order.shipment.label_created`, `order.shipment.dispatched`, `order.shipment.in_transit`, `order.shipment.delivered` |
+| Returns | 4 | `order.return.requested`, `order.return.approved`, `order.return.received`, `order.return.refunded` |
+| Cart | 4 | `order.cart.created`, `order.cart.item_added`, `order.cart.abandoned`, `order.cart.converted` |
+| Fulfillment | 3 | `order.fulfillment.started`, `order.fulfillment.item_picked`, `order.fulfillment.packed` |
+| Invoices | 2 | `order.invoice.created`, `order.invoice.sent` |
 | **Total** | **29** | |
+
+> **Nota:** Todos los eventos siguen el patrón `order.{entidad}.{accion}` según el estándar de mensajería del ERP.
 
 ## Configuración de Consumidores
 

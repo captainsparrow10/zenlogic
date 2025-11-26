@@ -330,33 +330,234 @@ async def check_user_limit(org_id: str):
         )
 ```
 
-## Locales (Sucursales)
+## Jerarquía de Filtrado: Organization → Warehouse → Local
 
-Cada organización puede tener múltiples **locales** (sucursales, bodegas).
+El sistema usa una jerarquía de tres niveles para el aislamiento de datos:
 
-### Tabla Locals
+```
+Organization (Tenant)
+    └── Warehouse (Almacén/Bodega)
+            └── Local (Punto de Venta/Sucursal)
+```
+
+### Relación Local → Warehouse
+
+Cada **local** (punto de venta) tiene un **warehouse por defecto** de donde descuenta inventario:
 
 ```sql
 CREATE TABLE locals (
-  id VARCHAR PRIMARY KEY,
-  organization_id VARCHAR NOT NULL,  ← Pertenece a un tenant
-  name VARCHAR,
-  code VARCHAR,
-  address TEXT,
-  status VARCHAR,
-  ...
+    id UUID PRIMARY KEY,
+    organization_id UUID NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20) NOT NULL,
+    default_warehouse_id UUID NOT NULL,  -- Warehouse por defecto
+    address TEXT,
+    status VARCHAR(20) DEFAULT 'active',
+    CONSTRAINT fk_local_org FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    CONSTRAINT fk_local_warehouse FOREIGN KEY (default_warehouse_id) REFERENCES warehouses(id),
+    CONSTRAINT uk_local_code UNIQUE (organization_id, code)
 );
 ```
 
-### Usuarios y Locales
+### Tabla Warehouses
+
+```sql
+CREATE TABLE warehouses (
+    id UUID PRIMARY KEY,
+    organization_id UUID NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20) NOT NULL,
+    type VARCHAR(20) DEFAULT 'general',  -- general, cold_storage, returns
+    address TEXT,
+    status VARCHAR(20) DEFAULT 'active',
+    CONSTRAINT fk_warehouse_org FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    CONSTRAINT uk_warehouse_code UNIQUE (organization_id, code)
+);
+```
+
+### Contexto de Filtrado por Servicio
+
+| Servicio | Filtrado Principal | Filtrado Secundario |
+|----------|-------------------|---------------------|
+| **Auth Service** | `organization_id` | `local_id` (asignación usuarios) |
+| **Catalog Service** | `organization_id` | - (productos globales por org) |
+| **Inventory Service** | `organization_id` | `warehouse_id` (stock por bodega) |
+| **POS Service** | `organization_id` | `local_id` (transacciones por local) |
+| **Order Service** | `organization_id` | `local_id` (órdenes por local) |
+| **Pricing Service** | `organization_id` | `local_id` (precios pueden variar) |
+| **Audit Service** | `organization_id` | - (logs centralizados) |
+
+### Ejemplo: Flujo de Venta en POS
+
+```
+1. Usuario hace login → obtiene organization_id + local_id
+2. Local tiene default_warehouse_id configurado
+3. Al vender producto:
+   - POS crea transacción con local_id
+   - Inventory descuenta stock del warehouse del local
+   - Order registra con local_id
+```
+
+```python
+# Al crear transacción de venta
+async def create_sale(
+    org_id: str,
+    local_id: str,
+    items: list[SaleItem]
+):
+    # Obtener warehouse del local
+    local = await db.get_local(org_id, local_id)
+    warehouse_id = local.default_warehouse_id
+
+    # Crear transacción
+    transaction = await pos_service.create_transaction(
+        organization_id=org_id,
+        local_id=local_id
+    )
+
+    # Descontar inventario del warehouse correcto
+    for item in items:
+        await inventory_service.reserve_stock(
+            organization_id=org_id,
+            warehouse_id=warehouse_id,  # Del local
+            variant_id=item.variant_id,
+            quantity=item.quantity
+        )
+
+    return transaction
+```
+
+## Filtrado Obligatorio en Queries
+
+### Regla de Oro
+
+**TODOS los queries DEBEN incluir `organization_id`. Algunos también requieren `warehouse_id` o `local_id`.**
+
+### Por Servicio
+
+#### Inventory Service - Stock por Warehouse
+
+```python
+# ✅ CORRECTO - Filtrar por org + warehouse
+async def get_stock(org_id: str, warehouse_id: str, variant_id: str):
+    return await db.query(StockLevel).filter(
+        StockLevel.organization_id == org_id,
+        StockLevel.warehouse_id == warehouse_id,
+        StockLevel.variant_id == variant_id
+    ).first()
+
+# ❌ INCORRECTO - Falta warehouse_id
+async def get_stock_wrong(org_id: str, variant_id: str):
+    # Esto retornaría stock de CUALQUIER warehouse
+    return await db.query(StockLevel).filter(
+        StockLevel.organization_id == org_id,
+        StockLevel.variant_id == variant_id
+    ).first()
+```
+
+#### POS Service - Transacciones por Local
+
+```python
+# ✅ CORRECTO - Filtrar por org + local
+async def get_transactions(org_id: str, local_id: str, date: date):
+    return await db.query(Transaction).filter(
+        Transaction.organization_id == org_id,
+        Transaction.local_id == local_id,
+        Transaction.date == date
+    ).all()
+
+# ❌ INCORRECTO - Falta local_id
+async def get_transactions_wrong(org_id: str, date: date):
+    # Esto retornaría transacciones de TODOS los locales
+    return await db.query(Transaction).filter(
+        Transaction.organization_id == org_id,
+        Transaction.date == date
+    ).all()
+```
+
+### Middleware de Validación
+
+```python
+from fastapi import Request, HTTPException
+
+class TenantContextMiddleware:
+    """Middleware que inyecta y valida contexto de tenant."""
+
+    async def __call__(self, request: Request, call_next):
+        # Headers obligatorios
+        org_id = request.headers.get("X-Organization-ID")
+        local_id = request.headers.get("X-Local-ID")
+
+        if not org_id:
+            raise HTTPException(428, "X-Organization-ID es obligatorio")
+
+        # Validar que local pertenece a org
+        if local_id:
+            local = await self.get_local(local_id)
+            if local.organization_id != org_id:
+                raise HTTPException(403, "Local no pertenece a organización")
+
+            # Inyectar warehouse_id del local
+            request.state.warehouse_id = local.default_warehouse_id
+
+        request.state.organization_id = org_id
+        request.state.local_id = local_id
+
+        return await call_next(request)
+```
+
+### Dependency para Endpoints
+
+```python
+from fastapi import Depends, Request
+
+class TenantContext:
+    """Contexto de tenant para inyección en endpoints."""
+
+    def __init__(
+        self,
+        organization_id: str,
+        local_id: str | None = None,
+        warehouse_id: str | None = None
+    ):
+        self.organization_id = organization_id
+        self.local_id = local_id
+        self.warehouse_id = warehouse_id
+
+async def get_tenant_context(request: Request) -> TenantContext:
+    """Dependency que extrae contexto de tenant."""
+    return TenantContext(
+        organization_id=request.state.organization_id,
+        local_id=getattr(request.state, 'local_id', None),
+        warehouse_id=getattr(request.state, 'warehouse_id', None)
+    )
+
+# Uso en endpoints
+@router.get("/stock/{variant_id}")
+async def get_stock(
+    variant_id: str,
+    ctx: TenantContext = Depends(get_tenant_context)
+):
+    # ctx tiene org_id, local_id, warehouse_id
+    return await inventory_service.get_stock(
+        org_id=ctx.organization_id,
+        warehouse_id=ctx.warehouse_id,
+        variant_id=variant_id
+    )
+```
+
+## Usuarios y Locales
 
 Un usuario puede tener acceso a uno o más locales:
 
 ```sql
-CREATE TABLE user_local (
-  user_id VARCHAR,
-  local_id VARCHAR,
-  PRIMARY KEY (user_id, local_id)
+CREATE TABLE user_locals (
+    user_id UUID NOT NULL,
+    local_id UUID NOT NULL,
+    is_default BOOLEAN DEFAULT false,
+    PRIMARY KEY (user_id, local_id),
+    CONSTRAINT fk_user_local_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT fk_user_local_local FOREIGN KEY (local_id) REFERENCES locals(id)
 );
 ```
 
@@ -376,6 +577,36 @@ async def validate_local_access(user_id: str, local_id: str):
         raise ForbiddenError(
             f"Usuario no tiene acceso al local {local_id}"
         )
+```
+
+### Flujo de Autenticación con Local
+
+```python
+@router.post("/login")
+async def login(credentials: LoginRequest):
+    # 1. Verificar credenciales
+    user = await auth_service.authenticate(
+        credentials.email,
+        credentials.password
+    )
+
+    # 2. Obtener locales del usuario
+    user_locals = await db.query(UserLocal).filter(
+        UserLocal.user_id == user.id
+    ).all()
+
+    # 3. Incluir en token
+    token = create_jwt({
+        "user_id": user.id,
+        "organization_id": user.organization_id,
+        "local_ids": [ul.local_id for ul in user_locals],
+        "default_local_id": next(
+            (ul.local_id for ul in user_locals if ul.is_default),
+            user_locals[0].local_id if user_locals else None
+        )
+    })
+
+    return {"access_token": token}
 ```
 
 ## Ejemplos de Queries Multi-tenant
@@ -537,5 +768,5 @@ async def audit_potential_breach(
 - [Seguridad y RBAC](/arquitectura/seguridad-rbac)
 - [Auth Service - Organizations](/microservicios/auth-service/api-organizations)
 - [Auth Service - Locals](/microservicios/auth-service/api-locals)
-- [ADR-006: PostgreSQL Multi-tenant](/decisiones-arquitectura/adr-006-postgresql-multi-tenant)
-- [Integraciones - PostgreSQL](/integraciones/04-postgresql)
+- [ADR-006: PostgreSQL Multi-tenant](/adrs/adr-006-postgresql-multi-tenant)
+- [Integraciones - PostgreSQL](/integraciones/postgresql)

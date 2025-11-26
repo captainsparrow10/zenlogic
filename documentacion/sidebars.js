@@ -17,7 +17,7 @@ const sidebars = {
     'intro',
     {
       type: 'category',
-      label: '📐 Arquitectura General',
+      label: 'Arquitectura General',
       collapsed: false,
       items: [
         'arquitectura/vision-general',
@@ -27,11 +27,16 @@ const sidebars = {
         'arquitectura/multi-tenancy',
         'arquitectura/seguridad-rbac',
         'arquitectura/patrones-diseno',
+        'arquitectura/api-gateway',
+        'arquitectura/graphql-gateway',
+        'arquitectura/eventos-mensajeria',
+        'arquitectura/variantes-vs-stock',
+        'arquitectura/politica-precios',
       ],
     },
     {
       type: 'category',
-      label: '🔧 Microservicios',
+      label: 'Microservicios',
       collapsed: false,
       items: [
         {
@@ -68,21 +73,23 @@ const sidebars = {
             'microservicios/catalog-service/eventos-publicados',
             'microservicios/catalog-service/eventos-consumidos',
             'microservicios/catalog-service/validacion-locales',
+            'microservicios/catalog-service/grpc-server',
             'microservicios/catalog-service/auth-client-grpc',
             'microservicios/catalog-service/api-products',
             'microservicios/catalog-service/api-variants',
             'microservicios/catalog-service/api-options',
-            'microservicios/catalog-service/api-brands',
-            'microservicios/catalog-service/api-collections',
-            'microservicios/catalog-service/api-tags',
-            'microservicios/catalog-service/api-price-tiers',
-            'microservicios/catalog-service/api-images',
             'microservicios/catalog-service/paginacion-cursor',
             'microservicios/catalog-service/cache-strategy',
             'microservicios/catalog-service/flujos-negocio',
             'microservicios/catalog-service/testing',
             'microservicios/catalog-service/errores-comunes',
             'microservicios/catalog-service/migraciones',
+            'microservicios/catalog-service/api-brands',
+            'microservicios/catalog-service/api-collections',
+            'microservicios/catalog-service/api-tags',
+            'microservicios/catalog-service/api-price-tiers',
+            'microservicios/catalog-service/api-images',
+            'microservicios/catalog-service/integraciones',
           ],
         },
         {
@@ -93,6 +100,8 @@ const sidebars = {
             'microservicios/inventory-service/overview',
             'microservicios/inventory-service/arquitectura',
             'microservicios/inventory-service/modelo-datos',
+            'microservicios/inventory-service/configuracion',
+            'microservicios/inventory-service/grpc-server',
             'microservicios/inventory-service/api-stock',
             'microservicios/inventory-service/api-movements',
             'microservicios/inventory-service/api-warehouses',
@@ -112,12 +121,18 @@ const sidebars = {
           collapsed: true,
           items: [
             'microservicios/order-service/overview',
+            'microservicios/order-service/arquitectura',
             'microservicios/order-service/modelo-datos',
+            'microservicios/order-service/configuracion',
             'microservicios/order-service/api-orders',
             'microservicios/order-service/api-cart',
+            'microservicios/order-service/api-payments',
             'microservicios/order-service/state-machine',
             'microservicios/order-service/eventos-publicados',
+            'microservicios/order-service/eventos-consumidos',
+            'microservicios/order-service/integraciones',
             'microservicios/order-service/errores-comunes',
+            'microservicios/order-service/flujos-negocio',
           ],
         },
         {
@@ -129,6 +144,7 @@ const sidebars = {
             'microservicios/audit-service/alcance',
             'microservicios/audit-service/arquitectura',
             'microservicios/audit-service/modelo-datos',
+            'microservicios/audit-service/configuracion',
             'microservicios/audit-service/event-consumer',
             'microservicios/audit-service/api-logs',
             'microservicios/audit-service/retention-policy',
@@ -146,6 +162,7 @@ const sidebars = {
             'microservicios/pos-service/api-transactions',
             'microservicios/pos-service/api-products',
             'microservicios/pos-service/api-payments',
+            'microservicios/pos-service/api-drawers',
             'microservicios/pos-service/eventos-publicados',
             'microservicios/pos-service/eventos-consumidos',
             'microservicios/pos-service/integraciones',
@@ -225,7 +242,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '📋 Decisiones de Arquitectura (ADRs)',
+      label: 'Decisiones de Arquitectura (ADRs)',
       collapsed: false,
       items: [
         'adrs/introduccion-adrs',
@@ -240,7 +257,18 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '🔌 Integraciones',
+      label: 'Flujos de Negocio',
+      collapsed: false,
+      items: [
+        'flujos-negocio/flujo-venta-completo',
+        'flujos-negocio/flujo-compras',
+        'flujos-negocio/flujo-devoluciones',
+        'flujos-negocio/sistema-pagos',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Integraciones',
       collapsed: false,
       items: [
         'integraciones/overview',
@@ -252,7 +280,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '🚢 Deployment',
+      label: 'Deployment',
       collapsed: false,
       items: [
         'deployment/docker-compose',
@@ -260,7 +288,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '🧪 Testing',
+      label: 'Testing',
       collapsed: false,
       items: [
         'testing/estrategia-testing',
@@ -268,7 +296,23 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '📚 Guías',
+      label: 'Observabilidad',
+      collapsed: false,
+      items: [
+        'observabilidad/guia-observabilidad',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Resiliencia',
+      collapsed: false,
+      items: [
+        'resiliencia/error-handling-retry',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Guías',
       collapsed: false,
       items: [
         'guias/setup-local',
@@ -276,11 +320,12 @@ const sidebars = {
         'guias/testing',
         'guias/deployment',
         'guias/troubleshooting',
+        'guias/poetry-setup',
       ],
     },
     {
       type: 'category',
-      label: '📎 Anexos',
+      label: 'Anexos',
       collapsed: false,
       items: [
         'anexos/glosario',

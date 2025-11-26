@@ -4,240 +4,168 @@ sidebar_position: 3
 
 # Modelo de Datos
 
-Esquema completo de la base de datos del Order Service con entidades, relaciones e índices.
+## Estándares de Tipos de Datos
 
-## Diagrama ER
+> **Convención del ERP**: Todos los servicios usan tipos estandarizados para garantizar consistencia.
+>
+> | Tipo de Campo | Estándar | Descripción |
+> |---------------|----------|-------------|
+> | IDs primarios | `UUID` | Identificadores únicos universales |
+> | Dinero | `DECIMAL(12,4)` | 12 dígitos, 4 decimales |
+> | Tasas (%) | `DECIMAL(5,4)` | Ej: 0.0700 = 7% |
+> | Cantidades | `DECIMAL(10,3)` | Para productos por peso |
+
+Esquema simplificado de Order Service como sistema de **registro interno de ventas**.
+
+## Concepto
+
+Order Service NO gestiona:
+- Pagos electrónicos (Stripe, PayPal)
+- Delivery/envíos
+- Tracking de pedidos
+- Fulfillment/picking/packing
+- Carritos de compra online
+
+Order Service SÍ gestiona:
+- Registro de ventas completadas
+- Registro informativo del método de pago
+- Generación de facturas internas
+- Historial de órdenes por cliente
+
+> **Importante**: El dinero se maneja externamente entre el negocio y el cliente. El sistema solo registra qué se vendió y genera la factura.
+
+## Diagrama ER Simplificado
 
 ```mermaid
 erDiagram
     ORDER ||--o{ ORDER_ITEM : contains
-    ORDER ||--o{ PAYMENT : has
-    ORDER ||--o{ SHIPMENT : has
-    ORDER ||--o{ RETURN : has
     ORDER ||--|| INVOICE : generates
-    ORDER ||--o{ FULFILLMENT_TASK : requires
-    ORDER ||--o{ ORDER_STATUS_HISTORY : tracks
-
-    CART ||--o{ CART_ITEM : contains
-
-    SHIPMENT ||--o{ SHIPMENT_TRACKING_EVENT : has
-    RETURN ||--o{ RETURN_ITEM : contains
-
-    PAYMENT ||--o{ PAYMENT_TRANSACTION : records
-    ORDER_ITEM ||--o{ RETURN_ITEM : can_be_returned
-    ORDER ||--o{ FULFILLMENT_TASK : requires
 
     ORDER {
-        uuid order_id PK
+        uuid id PK
         uuid organization_id FK
-        uuid customer_id FK
         uuid local_id FK
+        uuid customer_id FK
         string order_number UK
         enum status
-        enum order_type
         decimal subtotal
-        decimal shipping_cost
         decimal tax_amount
         decimal discount_amount
         decimal total_amount
-        string currency
-        jsonb shipping_address
-        jsonb billing_address
-        uuid cart_id FK
-        timestamp placed_at
-        timestamp confirmed_at
-        timestamp cancelled_at
+        string payment_method
+        text notes
+        uuid created_by FK
         timestamp created_at
     }
 
     ORDER_ITEM {
-        uuid order_item_id PK
+        uuid id PK
         uuid order_id FK
         uuid variant_id FK
         string sku
         string product_name
         int quantity
         decimal unit_price
-        decimal subtotal
-        decimal tax_amount
-        decimal discount_amount
+        decimal tax
+        decimal discount
         decimal total
-        jsonb variant_snapshot
-    }
-
-    CART {
-        uuid cart_id PK
-        uuid organization_id FK
-        uuid customer_id FK
-        uuid session_id
-        enum status
-        decimal subtotal
-        decimal total
-        timestamp expires_at
-        timestamp converted_at
-    }
-
-    PAYMENT {
-        uuid payment_id PK
-        uuid order_id FK
-        enum status
-        enum payment_method
-        decimal amount
-        string currency
-        string gateway_payment_id
-        string gateway_customer_id
-        jsonb metadata
-        timestamp paid_at
-    }
-
-    SHIPMENT {
-        uuid shipment_id PK
-        uuid order_id FK
-        uuid warehouse_id FK
-        enum status
-        string carrier
-        string tracking_number
-        jsonb shipping_address
-        date estimated_delivery
-        timestamp shipped_at
-        timestamp delivered_at
-    }
-
-    RETURN {
-        uuid return_id PK
-        uuid order_id FK
-        string rma_number UK
-        enum status
-        enum reason
-        decimal refund_amount
-        timestamp requested_at
-        timestamp approved_at
     }
 
     INVOICE {
-        uuid invoice_id PK
+        uuid id PK
         uuid order_id FK
         string invoice_number UK
-        enum invoice_type
         decimal total_amount
-        string currency
         string pdf_url
-        string xml_url
         timestamp issued_at
     }
 ```
 
-## Entidades Principales
+## Tablas
 
-### 1. Order (orders)
+### Orders
 
-Tabla principal de órdenes de venta.
+Registro principal de ventas.
 
 ```sql
 CREATE TABLE orders (
-    order_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL,
-    customer_id UUID NOT NULL,
     local_id UUID NOT NULL,
+    customer_id UUID,  -- Opcional para ventas anónimas
 
-    -- Identificadores
-    order_number VARCHAR(50) NOT NULL UNIQUE,
-    cart_id UUID,
-    reservation_id UUID,  -- FK a Inventory Service (reservation)
+    -- Identificador
+    order_number VARCHAR(50) NOT NULL,
 
-    -- Estado
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-    order_type VARCHAR(20) NOT NULL DEFAULT 'online',
-    version INTEGER NOT NULL DEFAULT 1,  -- Para optimistic locking
+    -- Estado simple: solo completed o cancelled
+    status VARCHAR(20) NOT NULL DEFAULT 'completed',
 
-    -- Montos
-    subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    shipping_cost DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    -- Montos (DECIMAL(12,4) por estándar del ERP)
+    subtotal DECIMAL(12,4) NOT NULL DEFAULT 0,
+    tax_amount DECIMAL(12,4) NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(12,4) NOT NULL DEFAULT 0,
+    total_amount DECIMAL(12,4) NOT NULL DEFAULT 0,
 
-    -- Direcciones (JSONB)
-    shipping_address JSONB NOT NULL,
-    billing_address JSONB NOT NULL,
-
-    -- Método de envío
-    shipping_method VARCHAR(50),
-    shipping_carrier VARCHAR(50),
+    -- Método de pago (solo informativo)
+    payment_method VARCHAR(30),  -- cash, card, transfer, credit
 
     -- Metadata
     notes TEXT,
-    internal_notes TEXT,
-    customer_notes TEXT,
-    tags VARCHAR(255)[],
-    metadata JSONB,
 
-    -- Timestamps
-    placed_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    confirmed_at TIMESTAMP,
-    cancelled_at TIMESTAMP,
+    -- Auditoría
+    created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
+    cancelled_at TIMESTAMP,
+    cancelled_by UUID,
+    cancellation_reason TEXT,
 
     -- Constraints
-    CONSTRAINT check_total_amount CHECK (total_amount >= 0),
-    CONSTRAINT check_subtotal CHECK (subtotal >= 0),
-    CONSTRAINT check_valid_status CHECK (
-        status IN (
-            'cart', 'pending', 'payment_pending', 'payment_failed',
-            'confirmed', 'processing', 'ready_to_ship', 'shipped',
-            'delivered', 'cancelled', 'return_requested', 'returned', 'refunded'
-        )
+    CONSTRAINT uk_order_number UNIQUE (organization_id, order_number),
+    CONSTRAINT chk_status CHECK (status IN ('completed', 'cancelled')),
+    CONSTRAINT chk_payment_method CHECK (
+        payment_method IN ('cash', 'card', 'transfer', 'credit', 'mixed', 'other')
     ),
-    CONSTRAINT check_valid_order_type CHECK (
-        order_type IN ('online', 'pos', 'phone', 'b2b', 'subscription')
-    )
+    CONSTRAINT chk_total_positive CHECK (total_amount >= 0)
 );
 
 -- Índices
-CREATE INDEX idx_orders_organization ON orders(organization_id);
+CREATE INDEX idx_orders_org ON orders(organization_id);
+CREATE INDEX idx_orders_local ON orders(local_id);
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_placed_at ON orders(placed_at DESC);
-CREATE INDEX idx_orders_order_number ON orders(order_number);
-CREATE INDEX idx_orders_local ON orders(local_id);
+CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX idx_orders_number ON orders(order_number);
 ```
 
-### 2. OrderItem (order_items)
+### Order Items
 
-Líneas de productos en la orden.
+Líneas de productos vendidos.
 
 ```sql
 CREATE TABLE order_items (
-    order_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL,
 
     -- Producto
     variant_id UUID NOT NULL,
     sku VARCHAR(100) NOT NULL,
     product_name VARCHAR(255) NOT NULL,
 
-    -- Cantidades y precios
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price DECIMAL(12, 2) NOT NULL CHECK (unit_price >= 0),
-    subtotal DECIMAL(12, 2) NOT NULL,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    total DECIMAL(12, 2) NOT NULL,
+    -- Cantidades y precios (estándares del ERP)
+    quantity DECIMAL(10,3) NOT NULL,
+    unit_price DECIMAL(12,4) NOT NULL,
+    tax_rate DECIMAL(5,4) DEFAULT 0,
+    tax_amount DECIMAL(12,4) DEFAULT 0,
+    discount_amount DECIMAL(12,4) DEFAULT 0,
+    total DECIMAL(12,4) NOT NULL,
 
-    -- Snapshot del producto al momento de la orden
-    variant_snapshot JSONB,
+    -- Snapshot de producto (opcional)
+    product_snapshot JSONB,
 
-    -- Fulfillment
-    warehouse_id UUID,
-    fulfillment_status VARCHAR(30) DEFAULT 'pending',
-
-    -- Metadata
-    notes TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_item_total CHECK (total >= 0)
+    CONSTRAINT fk_order_item_order FOREIGN KEY (order_id)
+        REFERENCES orders(id) ON DELETE CASCADE,
+    CONSTRAINT chk_quantity_positive CHECK (quantity > 0),
+    CONSTRAINT chk_unit_price_positive CHECK (unit_price >= 0)
 );
 
 CREATE INDEX idx_order_items_order ON order_items(order_id);
@@ -245,546 +173,315 @@ CREATE INDEX idx_order_items_variant ON order_items(variant_id);
 CREATE INDEX idx_order_items_sku ON order_items(sku);
 ```
 
-### 3. Cart (carts)
+### Invoices
 
-Carritos de compra.
-
-```sql
-CREATE TABLE carts (
-    cart_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    customer_id UUID,
-    session_id VARCHAR(255),
-
-    -- Estado
-    status VARCHAR(20) NOT NULL DEFAULT 'active',
-
-    -- Totales
-    subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    total DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    items_count INTEGER NOT NULL DEFAULT 0,
-
-    -- Metadata
-    metadata JSONB,
-
-    -- Expiración
-    expires_at TIMESTAMP NOT NULL,
-    converted_to_order_id UUID REFERENCES orders(order_id),
-    converted_at TIMESTAMP,
-
-    -- Timestamps
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-    last_activity_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_cart_status CHECK (
-        status IN ('active', 'abandoned', 'converted', 'expired')
-    )
-);
-
-CREATE INDEX idx_carts_customer ON carts(customer_id);
-CREATE INDEX idx_carts_session ON carts(session_id);
-CREATE INDEX idx_carts_status ON carts(status);
-CREATE INDEX idx_carts_expires_at ON carts(expires_at);
-```
-
-### 4. CartItem (cart_items)
-
-Productos en el carrito.
-
-```sql
-CREATE TABLE cart_items (
-    cart_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    cart_id UUID NOT NULL REFERENCES carts(cart_id) ON DELETE CASCADE,
-
-    variant_id UUID NOT NULL,
-    sku VARCHAR(100) NOT NULL,
-    product_name VARCHAR(255) NOT NULL,
-
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price DECIMAL(12, 2) NOT NULL,
-    subtotal DECIMAL(12, 2) NOT NULL,
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP
-);
-
-CREATE INDEX idx_cart_items_cart ON cart_items(cart_id);
-CREATE INDEX idx_cart_items_variant ON cart_items(variant_id);
-```
-
-### 5. Payment (payments)
-
-Transacciones de pago.
-
-```sql
-CREATE TABLE payments (
-    payment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    order_id UUID NOT NULL REFERENCES orders(order_id),
-
-    -- Estado
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    -- Método de pago
-    payment_method VARCHAR(50) NOT NULL,
-    payment_gateway VARCHAR(50),
-
-    -- Montos
-    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-
-    -- IDs del gateway
-    gateway_payment_id VARCHAR(255),
-    gateway_customer_id VARCHAR(255),
-    gateway_charge_id VARCHAR(255),
-
-    -- Detalles
-    card_brand VARCHAR(50),
-    card_last4 VARCHAR(4),
-
-    -- Metadata del gateway
-    metadata JSONB,
-    error_code VARCHAR(100),
-    error_message TEXT,
-
-    -- Timestamps
-    attempted_at TIMESTAMP,
-    paid_at TIMESTAMP,
-    failed_at TIMESTAMP,
-    refunded_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_payment_status CHECK (
-        status IN ('pending', 'processing', 'succeeded', 'failed', 'refunded', 'partially_refunded')
-    ),
-    CONSTRAINT check_payment_method CHECK (
-        payment_method IN ('stripe', 'paypal', 'mercadopago', 'cash', 'transfer', 'pos')
-    )
-);
-
-CREATE INDEX idx_payments_order ON payments(order_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_gateway_payment_id ON payments(gateway_payment_id);
-```
-
-### 6. Shipment (shipments)
-
-Envíos y tracking.
-
-```sql
-CREATE TABLE shipments (
-    shipment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    order_id UUID NOT NULL REFERENCES orders(order_id),
-    warehouse_id UUID NOT NULL,
-
-    -- Estado
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    -- Carrier
-    carrier VARCHAR(100),
-    carrier_service VARCHAR(100),
-    tracking_number VARCHAR(255),
-    tracking_url TEXT,
-
-    -- Dirección
-    shipping_address JSONB NOT NULL,
-
-    -- Costos
-    shipping_cost DECIMAL(12, 2),
-    carrier_cost DECIMAL(12, 2),
-
-    -- Fechas
-    estimated_delivery_date DATE,
-    shipped_at TIMESTAMP,
-    delivered_at TIMESTAMP,
-    failed_at TIMESTAMP,
-
-    -- Metadata
-    label_url TEXT,
-    metadata JSONB,
-    notes TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP,
-
-    CONSTRAINT check_shipment_status CHECK (
-        status IN ('pending', 'label_created', 'dispatched', 'in_transit', 'out_for_delivery', 'delivered', 'failed', 'returned')
-    )
-);
-
-CREATE INDEX idx_shipments_order ON shipments(order_id);
-CREATE INDEX idx_shipments_tracking_number ON shipments(tracking_number);
-CREATE INDEX idx_shipments_status ON shipments(status);
-```
-
-### 7. Return (returns)
-
-Devoluciones de productos.
-
-```sql
-CREATE TABLE returns (
-    return_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    order_id UUID NOT NULL REFERENCES orders(order_id),
-
-    -- RMA
-    rma_number VARCHAR(50) NOT NULL UNIQUE,
-
-    -- Estado
-    status VARCHAR(30) NOT NULL DEFAULT 'requested',
-
-    -- Motivo
-    reason VARCHAR(50) NOT NULL,
-    reason_detail TEXT,
-
-    -- Reembolso
-    refund_amount DECIMAL(12, 2),
-    refund_method VARCHAR(50),
-    refund_status VARCHAR(30),
-
-    -- Aprobación
-    approved_by UUID,
-    approved_at TIMESTAMP,
-    rejected_by UUID,
-    rejected_at TIMESTAMP,
-    rejection_reason TEXT,
-
-    -- Recepción
-    received_at TIMESTAMP,
-    inspected_at TIMESTAMP,
-    inspection_notes TEXT,
-
-    -- Timestamps
-    requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_return_status CHECK (
-        status IN ('requested', 'approved', 'rejected', 'received', 'inspected', 'refunded', 'completed')
-    ),
-    CONSTRAINT check_return_reason CHECK (
-        reason IN ('wrong_size', 'wrong_product', 'defective', 'damaged', 'not_as_described', 'changed_mind', 'other')
-    )
-);
-
-CREATE INDEX idx_returns_order ON returns(order_id);
-CREATE INDEX idx_returns_rma_number ON returns(rma_number);
-CREATE INDEX idx_returns_status ON returns(status);
-```
-
-### 8. Invoice (invoices)
-
-Facturas electrónicas.
+Facturas generadas por el sistema.
 
 ```sql
 CREATE TABLE invoices (
-    invoice_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL,
-    order_id UUID NOT NULL REFERENCES orders(order_id),
+    order_id UUID NOT NULL UNIQUE,
 
     -- Número de factura
-    invoice_number VARCHAR(50) NOT NULL UNIQUE,
-    invoice_type VARCHAR(20) NOT NULL DEFAULT 'sale',
+    invoice_number VARCHAR(50) NOT NULL,
 
-    -- Montos
-    subtotal DECIMAL(12, 2) NOT NULL,
-    tax_amount DECIMAL(12, 2) NOT NULL,
-    total_amount DECIMAL(12, 2) NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    -- Datos fiscales del cliente (opcional)
+    customer_tax_id VARCHAR(50),
+    customer_tax_name VARCHAR(255),
+    customer_address TEXT,
 
-    -- Documentos
+    -- Montos (copiados de orden, DECIMAL(12,4) estándar)
+    subtotal DECIMAL(12,4) NOT NULL,
+    tax_amount DECIMAL(12,4) NOT NULL,
+    total_amount DECIMAL(12,4) NOT NULL,
+
+    -- Documentos generados
     pdf_url TEXT,
-    xml_url TEXT,
 
-    -- Datos fiscales
-    tax_id VARCHAR(50),
-    tax_name VARCHAR(255),
-    fiscal_address JSONB,
-
-    -- Estado tributario
-    tax_authority_status VARCHAR(50),
-    tax_authority_id VARCHAR(255),
-    tax_authority_response JSONB,
-
-    -- Fechas
-    issued_at TIMESTAMP NOT NULL,
-    due_at TIMESTAMP,
-    sent_at TIMESTAMP,
-    paid_at TIMESTAMP,
-
+    -- Timestamps
+    issued_at TIMESTAMP NOT NULL DEFAULT NOW(),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT check_invoice_type CHECK (
-        invoice_type IN ('sale', 'credit_note', 'debit_note', 'proforma')
-    )
+    CONSTRAINT fk_invoice_order FOREIGN KEY (order_id)
+        REFERENCES orders(id),
+    CONSTRAINT uk_invoice_number UNIQUE (organization_id, invoice_number)
 );
 
+CREATE INDEX idx_invoices_org ON invoices(organization_id);
 CREATE INDEX idx_invoices_order ON invoices(order_id);
-CREATE INDEX idx_invoices_invoice_number ON invoices(invoice_number);
+CREATE INDEX idx_invoices_number ON invoices(invoice_number);
 CREATE INDEX idx_invoices_issued_at ON invoices(issued_at DESC);
 ```
 
-### 9. ReturnItem (return_items)
+## Estados de Orden
 
-Items específicos de una devolución.
+Solo 2 estados posibles:
 
-```sql
-CREATE TABLE return_items (
-    return_item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    return_id UUID NOT NULL REFERENCES returns(return_id) ON DELETE CASCADE,
-    order_item_id UUID NOT NULL REFERENCES order_items(order_item_id),
-    variant_id UUID NOT NULL,
-
-    -- Cantidades
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-
-    -- Condición
-    condition VARCHAR(30),
-    reason VARCHAR(255),
-
-    -- Reembolso
-    refund_amount DECIMAL(12, 2),
-
-    -- Inspección
-    inspected_quantity INTEGER DEFAULT 0,
-    approved_quantity INTEGER DEFAULT 0,
-    rejected_quantity INTEGER DEFAULT 0,
-    inspection_notes TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_return_items_return ON return_items(return_id);
-CREATE INDEX idx_return_items_order_item ON return_items(order_item_id);
-CREATE INDEX idx_return_items_variant ON return_items(variant_id);
+```mermaid
+stateDiagram-v2
+    [*] --> completed: Crear orden
+    completed --> cancelled: Cancelar
+    completed --> [*]
+    cancelled --> [*]
 ```
 
-### 10. ShipmentTrackingEvent (shipment_tracking_events)
+| Estado | Descripción |
+|--------|-------------|
+| `completed` | Venta registrada exitosamente |
+| `cancelled` | Orden anulada (requiere motivo) |
 
-Historial de eventos de tracking.
+## Métodos de Pago (Informativos)
+
+El método de pago es solo informativo, el sistema no procesa pagos:
+
+| Método | Descripción |
+|--------|-------------|
+| `cash` | Efectivo |
+| `card` | Tarjeta (débito/crédito) |
+| `transfer` | Transferencia bancaria |
+| `credit` | Crédito del cliente |
+| `mixed` | Combinación de métodos |
+| `other` | Otro método |
+
+## Ejemplo de Datos
+
+### Crear una venta
 
 ```sql
-CREATE TABLE shipment_tracking_events (
-    tracking_event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    shipment_id UUID NOT NULL REFERENCES shipments(shipment_id) ON DELETE CASCADE,
-
-    -- Estado
-    status VARCHAR(50) NOT NULL,
-    status_description TEXT,
-
-    -- Ubicación
-    location VARCHAR(255),
-    location_city VARCHAR(100),
-    location_state VARCHAR(100),
-    location_country VARCHAR(3),
-
-    -- Detalles
-    carrier_status VARCHAR(100),
-    carrier_status_code VARCHAR(50),
-
-    -- Timestamp del evento
-    event_timestamp TIMESTAMP NOT NULL,
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_tracking_status CHECK (
-        status IN ('pending', 'label_created', 'picked_up', 'in_transit', 'out_for_delivery',
-                   'delivery_attempted', 'delivered', 'exception', 'failed', 'returned')
-    )
+-- Insertar orden
+INSERT INTO orders (
+    id, organization_id, local_id, customer_id,
+    order_number, status, subtotal, tax_amount,
+    discount_amount, total_amount, payment_method,
+    created_by
+) VALUES (
+    gen_random_uuid(),
+    'org_123',
+    'local_001',
+    'cust_456',
+    'ORD-2025-0001',
+    'completed',
+    100.00,
+    12.00,
+    0.00,
+    112.00,
+    'cash',
+    'user_789'
 );
 
-CREATE INDEX idx_tracking_events_shipment ON shipment_tracking_events(shipment_id);
-CREATE INDEX idx_tracking_events_timestamp ON shipment_tracking_events(event_timestamp DESC);
-CREATE INDEX idx_tracking_events_status ON shipment_tracking_events(status);
+-- Insertar items
+INSERT INTO order_items (
+    order_id, variant_id, sku, product_name,
+    quantity, unit_price, tax_rate, tax_amount, total
+) VALUES
+    ('order_id', 'var_001', 'CAFE-001', 'Café Latte', 2, 25.00, 12, 6.00, 56.00),
+    ('order_id', 'var_002', 'CAKE-001', 'Pastel Chocolate', 1, 50.00, 12, 6.00, 56.00);
 ```
 
-### 11. FulfillmentTask (fulfillment_tasks)
-
-Tareas de picking y packing.
+### Cancelar una orden
 
 ```sql
-CREATE TABLE fulfillment_tasks (
-    task_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    order_id UUID NOT NULL REFERENCES orders(order_id),
-    warehouse_id UUID NOT NULL,
-
-    -- Tipo de tarea
-    task_type VARCHAR(30) NOT NULL,
-
-    -- Estado
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-    priority INTEGER DEFAULT 0,
-
-    -- Asignación
-    assigned_to UUID,
-    assigned_at TIMESTAMP,
-
-    -- Progreso
-    items_total INTEGER NOT NULL,
-    items_picked INTEGER DEFAULT 0,
-    items_packed INTEGER DEFAULT 0,
-
-    -- Timestamps
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    -- Metadata
-    notes TEXT,
-    metadata JSONB,
-
-    CONSTRAINT check_task_type CHECK (
-        task_type IN ('picking', 'packing', 'quality_check', 'label_printing')
-    ),
-    CONSTRAINT check_task_status CHECK (
-        status IN ('pending', 'assigned', 'in_progress', 'completed', 'cancelled')
-    )
-);
-
-CREATE INDEX idx_fulfillment_tasks_order ON fulfillment_tasks(order_id);
-CREATE INDEX idx_fulfillment_tasks_warehouse ON fulfillment_tasks(warehouse_id);
-CREATE INDEX idx_fulfillment_tasks_assigned_to ON fulfillment_tasks(assigned_to);
-CREATE INDEX idx_fulfillment_tasks_status ON fulfillment_tasks(status);
+UPDATE orders
+SET
+    status = 'cancelled',
+    cancelled_at = NOW(),
+    cancelled_by = 'user_admin',
+    cancellation_reason = 'Cliente solicitó cancelación'
+WHERE id = 'order_id'
+  AND organization_id = 'org_123';
 ```
 
-### 12. OrderStatusHistory (order_status_history)
+## Queries Comunes
 
-Historial de cambios de estado de órdenes.
-
-```sql
-CREATE TABLE order_status_history (
-    history_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
-
-    -- Estado
-    from_status VARCHAR(30),
-    to_status VARCHAR(30) NOT NULL,
-
-    -- Razón del cambio
-    reason VARCHAR(255),
-    notes TEXT,
-
-    -- Usuario que realizó el cambio
-    changed_by UUID,
-
-    -- Metadata
-    metadata JSONB,
-
-    changed_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_from_status_valid CHECK (
-        from_status IN (
-            'cart', 'pending', 'payment_pending', 'payment_failed',
-            'confirmed', 'processing', 'ready_to_ship', 'shipped',
-            'delivered', 'cancelled', 'return_requested', 'returned', 'refunded'
-        )
-    ),
-    CONSTRAINT check_to_status_valid CHECK (
-        to_status IN (
-            'cart', 'pending', 'payment_pending', 'payment_failed',
-            'confirmed', 'processing', 'ready_to_ship', 'shipped',
-            'delivered', 'cancelled', 'return_requested', 'returned', 'refunded'
-        )
-    )
-);
-
-CREATE INDEX idx_order_status_history_order ON order_status_history(order_id);
-CREATE INDEX idx_order_status_history_changed_at ON order_status_history(changed_at DESC);
-CREATE INDEX idx_order_status_history_to_status ON order_status_history(to_status);
-```
-
-### 13. PaymentTransaction (payment_transactions)
-
-Registro detallado de transacciones con payment gateways.
+### Ventas del día por local
 
 ```sql
-CREATE TABLE payment_transactions (
-    transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID NOT NULL REFERENCES payments(payment_id) ON DELETE CASCADE,
-
-    -- Tipo de transacción
-    transaction_type VARCHAR(30) NOT NULL,
-
-    -- Estado
-    status VARCHAR(30) NOT NULL,
-
-    -- Montos
-    amount DECIMAL(12, 2) NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-
-    -- Gateway
-    gateway_transaction_id VARCHAR(255),
-    gateway_response JSONB,
-
-    -- Error
-    error_code VARCHAR(100),
-    error_message TEXT,
-
-    -- Timestamps
-    processed_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT check_transaction_type CHECK (
-        transaction_type IN ('authorize', 'capture', 'charge', 'refund', 'void')
-    ),
-    CONSTRAINT check_transaction_status CHECK (
-        status IN ('pending', 'processing', 'succeeded', 'failed')
-    )
-);
-
-CREATE INDEX idx_payment_transactions_payment ON payment_transactions(payment_id);
-CREATE INDEX idx_payment_transactions_type ON payment_transactions(transaction_type);
-CREATE INDEX idx_payment_transactions_status ON payment_transactions(status);
-CREATE INDEX idx_payment_transactions_gateway_id ON payment_transactions(gateway_transaction_id);
-```
-
-## Vistas
-
-### v_order_summary
-
-```sql
-CREATE VIEW v_order_summary AS
 SELECT
-    o.order_id,
-    o.order_number,
-    o.organization_id,
-    o.customer_id,
-    o.status,
-    o.total_amount,
-    o.currency,
-    COUNT(oi.order_item_id) as items_count,
-    SUM(oi.quantity) as total_quantity,
-    o.placed_at,
-    o.confirmed_at,
-    p.status as payment_status,
-    s.status as shipment_status,
-    s.tracking_number
+    o.local_id,
+    COUNT(*) as total_orders,
+    SUM(o.total_amount) as total_sales,
+    o.payment_method,
+    COUNT(*) as count_by_method
 FROM orders o
-LEFT JOIN order_items oi ON o.order_id = oi.order_id
-LEFT JOIN payments p ON o.order_id = p.order_id AND p.status = 'succeeded'
-LEFT JOIN shipments s ON o.order_id = s.order_id
-GROUP BY o.order_id, p.status, s.status, s.tracking_number;
+WHERE o.organization_id = $1
+  AND o.status = 'completed'
+  AND o.created_at::date = CURRENT_DATE
+GROUP BY o.local_id, o.payment_method
+ORDER BY o.local_id;
 ```
 
-## Row-Level Security
+### Historial de compras de cliente
 
 ```sql
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE shipments ENABLE ROW LEVEL SECURITY;
+SELECT
+    o.order_number,
+    o.created_at,
+    o.total_amount,
+    o.payment_method,
+    array_agg(json_build_object(
+        'product', oi.product_name,
+        'quantity', oi.quantity,
+        'total', oi.total
+    )) as items
+FROM orders o
+JOIN order_items oi ON o.id = oi.order_id
+WHERE o.organization_id = $1
+  AND o.customer_id = $2
+  AND o.status = 'completed'
+GROUP BY o.id
+ORDER BY o.created_at DESC
+LIMIT 20;
+```
 
-CREATE POLICY orders_organization_isolation ON orders
-    USING (organization_id = current_setting('app.current_organization_id')::uuid);
+### Resumen de ventas por período
 
-CREATE POLICY payments_organization_isolation ON payments
-    USING (organization_id = current_setting('app.current_organization_id')::uuid);
+```sql
+SELECT
+    date_trunc('day', created_at) as fecha,
+    COUNT(*) as num_ordenes,
+    SUM(total_amount) as total_ventas,
+    AVG(total_amount) as ticket_promedio
+FROM orders
+WHERE organization_id = $1
+  AND local_id = $2
+  AND status = 'completed'
+  AND created_at BETWEEN $3 AND $4
+GROUP BY date_trunc('day', created_at)
+ORDER BY fecha DESC;
+```
+
+## SQLAlchemy Models
+
+```python
+from sqlalchemy import Column, String, Numeric, Integer, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
+import uuid
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), nullable=False)
+    local_id = Column(UUID(as_uuid=True), nullable=False)
+    customer_id = Column(UUID(as_uuid=True))
+
+    order_number = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default='completed')
+
+    subtotal = Column(Numeric(12, 4), nullable=False, default=0)
+    tax_amount = Column(Numeric(12, 4), nullable=False, default=0)
+    discount_amount = Column(Numeric(12, 4), nullable=False, default=0)
+    total_amount = Column(Numeric(12, 4), nullable=False, default=0)
+
+    payment_method = Column(String(30))
+    notes = Column(Text)
+
+    created_by = Column(UUID(as_uuid=True), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    cancelled_at = Column(DateTime)
+    cancelled_by = Column(UUID(as_uuid=True))
+    cancellation_reason = Column(Text)
+
+    # Relationships
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    invoice = relationship("Invoice", back_populates="order", uselist=False)
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
+
+    variant_id = Column(UUID(as_uuid=True), nullable=False)
+    sku = Column(String(100), nullable=False)
+    product_name = Column(String(255), nullable=False)
+
+    quantity = Column(Numeric(10, 3), nullable=False)
+    unit_price = Column(Numeric(12, 4), nullable=False)
+    tax_rate = Column(Numeric(5, 4), default=0)
+    tax_amount = Column(Numeric(12, 4), default=0)
+    discount_amount = Column(Numeric(12, 4), default=0)
+    total = Column(Numeric(12, 4), nullable=False)
+
+    product_snapshot = Column(JSONB)
+
+    # Relationships
+    order = relationship("Order", back_populates="items")
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), nullable=False)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False, unique=True)
+
+    invoice_number = Column(String(50), nullable=False)
+
+    customer_tax_id = Column(String(50))
+    customer_tax_name = Column(String(255))
+    customer_address = Column(Text)
+
+    subtotal = Column(Numeric(12, 4), nullable=False)
+    tax_amount = Column(Numeric(12, 4), nullable=False)
+    total_amount = Column(Numeric(12, 4), nullable=False)
+
+    pdf_url = Column(Text)
+
+    issued_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    order = relationship("Order", back_populates="invoice")
+```
+
+## Pydantic Schemas
+
+```python
+from pydantic import BaseModel
+from decimal import Decimal
+from datetime import datetime
+
+class OrderItemCreate(BaseModel):
+    variant_id: str
+    sku: str
+    product_name: str
+    quantity: int
+    unit_price: Decimal
+    tax_rate: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+
+class OrderCreate(BaseModel):
+    local_id: str
+    customer_id: str | None = None
+    payment_method: str = "cash"
+    items: list[OrderItemCreate]
+    notes: str | None = None
+
+class OrderResponse(BaseModel):
+    id: str
+    order_number: str
+    status: str
+    customer_id: str | None
+    local_id: str
+    subtotal: Decimal
+    tax_amount: Decimal
+    discount_amount: Decimal
+    total_amount: Decimal
+    payment_method: str | None
+    items: list[OrderItemResponse]
+    created_at: datetime
+    created_by: str
+
+class OrderCancelRequest(BaseModel):
+    reason: str
 ```
 
 ## Próximos Pasos
 
-- [Arquitectura](./arquitectura)
-- [API: Orders](./api-orders)
-- [State Machine](./state-machine)
+- [API Orders](./04-api-orders.md)
+- [Eventos Publicados](./11-eventos-publicados.md)
+- [Flujo de Venta Completo](/flujos-negocio/flujo-venta-completo)

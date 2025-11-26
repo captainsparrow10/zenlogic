@@ -543,7 +543,7 @@ class ProductService:
 
 **Descripción**: Paginación eficiente basada en cursors en lugar de offset.
 
-**Implementación**: Ver [ADR-007](/decisiones-arquitectura/adr-007-cursor-pagination)
+**Implementación**: Ver [ADR-007: Cursor Pagination](/adrs/adr-007-cursor-pagination)
 
 ```json
 {
@@ -608,4 +608,4 @@ async def list_products_v2():
 
 - [Auth Service](/microservicios/auth-service/overview)
 - [Catalog Service](/microservicios/catalog-service/overview)
-- [Decisiones de Arquitectura](/decisiones-arquitectura/00-introduccion-adrs)
+- [Decisiones de Arquitectura](/adrs/introduccion-adrs)

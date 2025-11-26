@@ -4,6 +4,17 @@ sidebar_position: 3
 
 # Modelo de Datos - POS Service
 
+## Estándares de Tipos de Datos
+
+> **Convención del ERP**: Todos los servicios usan tipos estandarizados para garantizar consistencia.
+>
+> | Tipo de Campo | Estándar | Descripción |
+> |---------------|----------|-------------|
+> | IDs primarios | `UUID` | Identificadores únicos universales |
+> | Dinero | `DECIMAL(12,4)` | 12 dígitos, 4 decimales |
+> | Tasas (%) | `DECIMAL(5,4)` | Ej: 0.0700 = 7% |
+> | Cantidades | `DECIMAL(10,3)` | Para productos por peso |
+
 ## Diagrama ER
 
 ```mermaid
@@ -107,16 +118,16 @@ CREATE TABLE transactions (
     -- Estado
     status VARCHAR(30) NOT NULL DEFAULT 'open',
 
-    -- Montos
-    subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    -- Montos (DECIMAL(12,4) por estándar del ERP)
+    subtotal DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
+    tax_amount DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
+    discount_amount DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
+    total_amount DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
 
     -- Descuentos
     discount_type VARCHAR(30),  -- 'percentage', 'fixed_amount', 'promotion'
-    discount_value DECIMAL(12, 2),
+    discount_value DECIMAL(12, 4),
     discount_authorized_by UUID,  -- Requerido para descuentos manuales
 
     -- Metadata
@@ -171,14 +182,14 @@ CREATE TABLE transaction_items (
     product_name VARCHAR(255) NOT NULL,
     barcode VARCHAR(100),
 
-    -- Cantidades y precios
+    -- Cantidades y precios (estándares del ERP)
     quantity DECIMAL(10, 3) NOT NULL CHECK (quantity > 0),  -- Decimal para productos por peso
-    unit_price DECIMAL(12, 2) NOT NULL CHECK (unit_price >= 0),
-    subtotal DECIMAL(12, 2) NOT NULL,
-    tax_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    unit_price DECIMAL(12, 4) NOT NULL CHECK (unit_price >= 0),
+    subtotal DECIMAL(12, 4) NOT NULL,
+    tax_amount DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
     tax_rate DECIMAL(5, 4) DEFAULT 0.0700,  -- 7% ITBMS Panamá
-    discount_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    total DECIMAL(12, 2) NOT NULL,
+    discount_amount DECIMAL(12, 4) NOT NULL DEFAULT 0.0000,
+    total DECIMAL(12, 4) NOT NULL,
 
     -- Snapshot del producto al momento de la venta
     variant_snapshot JSONB,
@@ -214,13 +225,13 @@ CREATE TABLE payments (
     -- Método de pago
     payment_method VARCHAR(30) NOT NULL,
 
-    -- Montos
-    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    -- Montos (estándares del ERP)
+    amount DECIMAL(12, 4) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
 
     -- Para efectivo
-    received DECIMAL(12, 2),  -- Cantidad recibida del cliente
-    change_due DECIMAL(12, 2) DEFAULT 0.00,  -- Vuelto
+    received DECIMAL(12, 4),  -- Cantidad recibida del cliente
+    change_due DECIMAL(12, 4) DEFAULT 0.0000,  -- Vuelto
 
     -- Para pagos electrónicos
     reference VARCHAR(255),  -- Número de referencia/comprobante
@@ -270,7 +281,7 @@ CREATE TABLE returns (
     reason_detail TEXT,
 
     -- Reembolso
-    refund_amount DECIMAL(12, 2) NOT NULL,
+    refund_amount DECIMAL(12, 4) NOT NULL,
     refund_method VARCHAR(30) NOT NULL,  -- 'original_payment', 'cash', 'credit_note'
 
     -- Autorización (siempre requerida)
@@ -314,7 +325,7 @@ CREATE TABLE return_items (
     quantity DECIMAL(10, 3) NOT NULL CHECK (quantity > 0),
 
     -- Montos de reembolso
-    refund_amount DECIMAL(12, 2) NOT NULL,
+    refund_amount DECIMAL(12, 4) NOT NULL,
 
     -- Condición del producto
     condition VARCHAR(30),  -- 'good', 'damaged', 'defective', 'opened'
