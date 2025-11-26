@@ -15,12 +15,14 @@
 - **Message Broker**: RabbitMQ 3.12 (AMQP)
 - **Comunicación Interna**: gRPC + Protocol Buffers
 - **Comunicación Externa**: REST APIs
+- **API Gateway**: Envoy Proxy
+- **GraphQL**: Strawberry (Federation)
 - **Contenedores**: Docker + Docker Compose (desarrollo) / Kubernetes (producción)
 - **Documentación**: Docusaurus 3.9.2 con soporte Mermaid
 
-### Microservicios Implementados
+### Microservicios Implementados (10 servicios)
 
-1. **Auth Service** (:8001)
+1. **Auth Service** (:8001, gRPC :50051)
    - Autenticación y autorización
    - Gestión de usuarios, roles y permisos
    - RBAC multi-nivel (organización → local → rol)
@@ -32,13 +34,47 @@
    - Paginación cursor-based
    - Cache strategy con Redis
    - gRPC client para validar locales
-   - Event-driven sync
 
-3. **Audit Service** (:8003)
+3. **Inventory Service** (:8003)
+   - Gestión de stock por variante y local
+   - Movimientos de inventario
+   - Reservas de stock
+   - Alertas de stock bajo
+
+4. **Order Service** (:8004)
+   - Gestión de órdenes y pedidos
+   - Integración con pagos
+   - Fulfillment y tracking
+
+5. **POS Service** (:8005)
+   - Punto de venta
+   - Gestión de cajas registradoras
+   - Ventas en tiempo real
+
+6. **Audit Service** (:8006)
    - Event consumer para auditoría
    - Almacenamiento de logs de sistema
    - Retention policies
-   - Queries especializadas para análisis
+
+7. **Customer Service** (:8007)
+   - Gestión de clientes
+   - Historial de compras
+   - Segmentación
+
+8. **Pricing Service** (:8008)
+   - Reglas de precios
+   - Promociones y descuentos
+   - Precios por local
+
+9. **Procurement Service** (:8009)
+   - Órdenes de compra
+   - Gestión de proveedores
+   - Recepción de mercadería
+
+10. **Reports Service** (:8010)
+    - Generación de reportes
+    - Exportación de datos
+    - Dashboards
 
 ### Patrones Arquitectónicos
 
@@ -49,7 +85,8 @@
 - **Cache-Aside Pattern**: Redis para optimización
 - **Circuit Breaker**: Resiliencia en comunicación gRPC
 - **Database per Service**: Aislamiento de datos
-- **API Gateway Pattern**: Load balancing y routing
+- **API Gateway Pattern**: Envoy para routing y load balancing
+- **GraphQL Federation**: Strawberry para queries complejas
 
 ## Estructura del Proyecto
 
@@ -58,125 +95,113 @@
 ├── .claude/                           # Configuración de Claude Code
 │   ├── settings.local.json           # Permisos y configuración
 │   ├── PROJECT_CONTEXT.md            # Este archivo
-│   └── RULES.md                      # Reglas del proyecto
+│   ├── RULES.md                      # Reglas del proyecto
+│   └── plans/                        # Planes de trabajo
 │
 ├── documentacion/                     # Documentación Docusaurus
-│   ├── docs/                         # Archivos markdown
+│   ├── docs/                         # Archivos markdown (187+ archivos)
 │   │   ├── intro.md
-│   │   ├── 01-arquitectura/         # 7 archivos
-│   │   ├── 02-microservicios/       # 40 archivos
-│   │   │   ├── auth-service/        # 14 archivos
-│   │   │   ├── catalog-service/     # 18 archivos
-│   │   │   └── audit-service/       # 8 archivos
+│   │   ├── 01-arquitectura/         # 11 archivos
+│   │   ├── 02-microservicios/       # 100+ archivos (10 servicios)
 │   │   ├── 03-adrs/                 # 8 archivos (ADRs)
+│   │   ├── 03-flujos-negocio/       # 5 archivos
 │   │   ├── 04-integraciones/        # 5 archivos
-│   │   ├── 05-guias/                # 5 archivos
-│   │   └── 06-anexos/               # 4 archivos
+│   │   ├── 05-guias/                # 6 archivos
+│   │   ├── 06-anexos/               # 4 archivos
+│   │   ├── 06-observabilidad/       # Métricas y logging
+│   │   ├── 07-resiliencia/          # Error handling
+│   │   ├── deployment/              # Docker y Kubernetes
+│   │   └── testing/                 # Estrategia de testing
 │   ├── sidebars.js                  # Configuración sidebar
 │   ├── docusaurus.config.js         # Configuración Docusaurus
-│   ├── package.json
 │   └── static/                      # Assets estáticos
 │
-└── [microservicios]/                 # Código fuente (no documentado aún)
-    ├── auth-service/
-    ├── catalog-service/
-    └── audit-service/
+└── [microservicios]/                 # Código fuente (futuro)
 ```
 
 ## Estado Actual de la Documentación
 
-### ✅ Completado (100%)
+### Completado (100%)
 
-**Total: 70 archivos markdown documentados**
+**Total: 187+ archivos markdown documentados**
 
-#### Arquitectura General (7 archivos)
-- ✅ Visión general del sistema
-- ✅ Stack tecnológico
-- ✅ Arquitectura event-driven
-- ✅ Comunicación entre microservicios
-- ✅ Multi-tenancy con RLS
-- ✅ Seguridad y RBAC
-- ✅ Patrones de diseño
+#### Arquitectura General (11 archivos)
+- Vision general del sistema
+- Stack tecnológico
+- Arquitectura event-driven
+- Comunicación entre microservicios
+- Multi-tenancy con RLS
+- Eventos y mensajería
+- Patrones de diseño
+- API Gateway (Envoy)
+- GraphQL Gateway
+- Variantes vs Stock
+- Política de Precios
 
-#### Microservicios (40 archivos)
+#### Microservicios (100+ archivos)
 
-**Auth Service (14 archivos)**
-- ✅ Overview y alcance
-- ✅ Arquitectura y modelo de datos
-- ✅ Configuración
-- ✅ Eventos publicados
-- ✅ gRPC server
-- ✅ APIs REST (auth, users, roles, permissions, locals, organizations)
-- ✅ Flujos de negocio
-
-**Catalog Service (18 archivos)**
-- ✅ Overview y alcance
-- ✅ Arquitectura y modelo de datos
-- ✅ Configuración
-- ✅ Eventos publicados/consumidos
-- ✅ Validación de locales
-- ✅ gRPC client
-- ✅ APIs REST (products, variants, options)
-- ✅ Paginación cursor-based
-- ✅ Cache strategy
-- ✅ Flujos de negocio
-- ✅ Testing
-- ✅ Errores comunes
-- ✅ Migraciones
-
-**Audit Service (8 archivos)**
-- ✅ Overview y alcance
-- ✅ Arquitectura y modelo de datos
-- ✅ Event consumer
-- ✅ API de logs
-- ✅ Retention policy
-- ✅ Queries comunes
+**Auth Service** - Completo
+**Catalog Service** - Completo (23 archivos)
+**Inventory Service** - Completo
+**Order Service** - Completo (15 archivos)
+**POS Service** - Completo
+**Audit Service** - Completo
+**Customer Service** - Completo
+**Pricing Service** - Completo
+**Procurement Service** - Completo
+**Reports Service** - Completo
 
 #### ADRs - Decisiones de Arquitectura (8 archivos)
-- ✅ ADR-001: Python y FastAPI
-- ✅ ADR-002: PostgreSQL como BD principal
-- ✅ ADR-003: Event-Driven Architecture
-- ✅ ADR-004: gRPC para comunicación interna
-- ✅ ADR-005: RBAC multi-nivel
-- ✅ ADR-006: PostgreSQL Multi-tenant con RLS
-- ✅ ADR-007: Cursor-based Pagination
+- ADR-001: Python y FastAPI
+- ADR-002: PostgreSQL como BD principal
+- ADR-003: Event-Driven Architecture
+- ADR-004: gRPC para comunicación interna
+- ADR-005: RBAC multi-nivel
+- ADR-006: PostgreSQL Multi-tenant con RLS
+- ADR-007: Cursor-based Pagination
+
+#### Flujos de Negocio (5 archivos)
+- Flujo de venta completo
+- Flujo de devoluciones
+- Flujo de compras
+- Sistema de pagos
 
 #### Integraciones (5 archivos)
-- ✅ Overview de integraciones
-- ✅ RabbitMQ (message broker)
-- ✅ Redis (cache y sessions)
-- ✅ gRPC (comunicación interna)
-- ✅ PostgreSQL (base de datos)
+- RabbitMQ (message broker)
+- Redis (cache y sessions)
+- gRPC (comunicación interna)
+- PostgreSQL (base de datos)
 
-#### Guías (5 archivos)
-- ✅ Setup local (Docker Compose)
-- ✅ Crear nuevo microservicio
-- ✅ Testing (unit, integration, e2e)
-- ✅ Deployment (Docker + Kubernetes)
-- ✅ Troubleshooting
-
-#### Anexos (4 archivos)
-- ✅ Glosario de términos
-- ✅ Convenciones de código
-- ✅ Referencias externas
-- ✅ Diagramas de arquitectura (20+ diagramas Mermaid)
-
-### Problemas Resueltos
-
-1. **Sidebar Navigation Issues**
-   - Problema: Rutas con prefijos numéricos no coincidían con IDs de Docusaurus
-   - Solución: Docusaurus strips numeric prefixes automáticamente, actualizado sidebars.js
-
-2. **Mermaid Diagram Cycle Error**
-   - Problema: Conflicto de nombres en diagrama Kubernetes (subgraph "Ingress" + node "Ingress")
-   - Solución: Renombrado subgraph a "Ingress Layer"
-   - Ubicación: `docs/06-anexos/03-diagramas.md:444`
-
-3. **MDX Compilation Errors**
-   - Problema: Caracteres < y > interpretados como JSX
-   - Solución: Usar backticks para valores como `<1ms>`, `>100ms`
+#### Guías (6 archivos)
+- Setup local (Docker Compose)
+- Crear nuevo microservicio
+- Testing (unit, integration, e2e)
+- Deployment (Docker + Kubernetes)
+- Troubleshooting
+- Poetry Setup
 
 ## Convenciones del Proyecto
+
+### Formato de Eventos (Estandarizado)
+
+```json
+{
+  "event": "{servicio}.{entidad}.{accion}",
+  "timestamp": "2025-11-25T12:00:00Z",
+  "service": "{nombre-servicio}",
+  "version": "1.0",
+  "organization_id": "org_xxx",
+  "data": {
+    // Campos específicos del evento
+  }
+}
+```
+
+**Ejemplos de Routing Keys**:
+- `auth.user.created`
+- `catalog.product.updated`
+- `order.order.completed`
+- `inventory.stock.reserved`
 
 ### Código Python
 
@@ -204,132 +229,57 @@
   - `POST /api/v1/products`
   - `GET /api/v1/products/{id}`
 - **Status Codes**: usar códigos HTTP apropiados
-  - 200 OK, 201 Created, 204 No Content
-  - 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found
-  - 409 Conflict, 500 Internal Server Error
-
-### Eventos
-
-- **Routing Keys**: `{service}.{entity}.{action}`
-  - `auth.user.created`
-  - `catalog.product.updated`
-- **Payload**: estructura consistente con event_id, timestamp, service, version, payload, metadata
 
 ### Git
 
 - **Commits**: imperativo, descriptivo
-  - ✅ "Add product creation endpoint"
-  - ✅ "Fix SKU validation for special characters"
-  - ❌ "changes", "fix bug"
+  - `Add product creation endpoint`
+  - `Fix SKU validation for special characters`
 - **Branches**: `{tipo}/{descripción}`
   - `feature/user-authentication`
   - `bugfix/sku-validation`
-  - `hotfix/cache-invalidation`
-
-## Tecnologías y Herramientas
-
-### Desarrollo
-
-- Python 3.11+
-- FastAPI
-- SQLAlchemy (async ORM)
-- Alembic (migraciones)
-- Pydantic (validación)
-- pytest + pytest-asyncio
-
-### Infraestructura
-
-- Docker + Docker Compose
-- Kubernetes (producción)
-- PostgreSQL 15+
-- Redis 7
-- RabbitMQ 3.12
-
-### Observabilidad (planificado)
-
-- Prometheus (métricas)
-- Grafana (dashboards)
-- Loki (logs)
-- Jaeger (tracing)
 
 ## URLs y Recursos
 
 ### Documentación Local
 
-- **Docusaurus**: http://localhost:3000/
+- **Docusaurus**: http://localhost:3000/ o http://localhost:3001/
 - **Comando**: `cd documentacion && npm start`
 
 ### Servicios (cuando estén corriendo)
 
 - Auth Service: http://localhost:8001
 - Catalog Service: http://localhost:8002
-- Audit Service: http://localhost:8003
+- Inventory Service: http://localhost:8003
+- Order Service: http://localhost:8004
+- POS Service: http://localhost:8005
+- Audit Service: http://localhost:8006
+- Customer Service: http://localhost:8007
+- Pricing Service: http://localhost:8008
 - RabbitMQ Management: http://localhost:15672
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
-## Próximos Pasos
-
-### Código Fuente (Pendiente)
-
-1. Implementar Auth Service
-2. Implementar Catalog Service
-3. Implementar Audit Service
-4. Configurar Docker Compose para desarrollo
-5. Setup de infraestructura compartida (PostgreSQL, Redis, RabbitMQ)
-
-### Documentación (Completada)
-
-✅ Toda la documentación está completa y funcionando
-✅ Sidebar navigation corregida
-✅ Mermaid diagrams funcionando correctamente
-✅ Server compilando sin errores
-
-## Notas Importantes
-
-### Docusaurus
-
-- **Versión**: 3.9.2
-- **Plugin Mermaid**: @docusaurus/theme-mermaid
-- **ID Generation**: Docusaurus automáticamente elimina prefijos numéricos (01-, 02-, etc.) de nombres de carpetas/archivos al generar document IDs
-- **Sidebar Paths**: Usar IDs sin prefijos (ej: `arquitectura/vision-general` NO `01-arquitectura/vision-general`)
-
-### Multi-tenancy
-
-- PostgreSQL Row-Level Security (RLS) es fundamental
-- SET LOCAL app.current_tenant en cada request
-- Políticas RLS aplicadas automáticamente
-- Aislamiento garantizado incluso con bugs en queries
-
-### Eventos
-
-- Publisher: Auth Service, Catalog Service
-- Consumer: Catalog Service, Audit Service
-- Dead Letter Queue configurada para manejo de errores
-- Event versioning para compatibilidad
-
-### Seguridad
-
-- JWT con RS256 (asimétrico)
-- Refresh tokens con rotación
-- RBAC jerárquico (org → local → rol → permisos)
-- RLS en PostgreSQL para multi-tenancy
-- Validación en múltiples capas (Pydantic, DB constraints)
-
 ## Historial de Cambios
+
+### 2025-11-25 (FASE 10 Completada)
+
+- Estandarización completa de formato de eventos (`event` + `data`)
+- 49 archivos modificados, +8,462 líneas
+- 14 archivos nuevos creados
+- 10 microservicios con documentación completa
+- API Gateway y GraphQL Gateway documentados
+- Flujos de negocio expandidos
 
 ### 2025-11-23
 
-- ✅ Completada sección Guías (5 archivos)
-- ✅ Corregida navegación sidebar (paths sin prefijos numéricos)
-- ✅ Corregido error Mermaid en diagrama Kubernetes
-- ✅ Eliminado directorio vacío `03-decisiones-arquitectura/`
-- ✅ Verificadas todas las 70 páginas de documentación
-- ✅ Servidor Docusaurus compilando exitosamente sin errores
-- ✅ Creados archivos de contexto y reglas en `.claude/`
+- Completada sección Guías
+- Corregida navegación sidebar
+- Corregido error Mermaid en diagrama Kubernetes
+- Verificadas todas las páginas de documentación
 
 ---
 
-**Última actualización**: 2025-11-23
+**Última actualización**: 2025-11-25
 **Estado**: Documentación completa y funcional
-**Próximo objetivo**: Implementación del código fuente de microservicios
+**Commit**: `485571d` en branch `development`
